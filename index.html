@@ -117,11 +117,13 @@
     .res-row:last-child { border-bottom:none; }
     /* Slicer badge */
     .sl-badge { display:inline-flex; align-items:center; gap:6px; padding:4px 14px; border-radius:20px; font-size:12px; font-weight:700; }
-    .sl-bambu { background:rgba(255,107,53,.15); border:1px solid rgba(255,107,53,.4); color:#ff6b35; }
-    .sl-orca  { background:rgba(34,211,165,.12); border:1px solid rgba(34,211,165,.4); color:#22d3a5; }
-    .sl-prusa { background:rgba(76,154,255,.12); border:1px solid rgba(76,154,255,.4); color:#4c9aff; }
-    .sl-cura  { background:rgba(168,85,247,.12); border:1px solid rgba(168,85,247,.4); color:#a855f7; }
-    .sl-unk   { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.2); color:#9999b0; }
+    .sl-bambu   { background:rgba(255,107,53,.15); border:1px solid rgba(255,107,53,.4); color:#ff6b35; }
+    .sl-orca    { background:rgba(34,211,165,.12); border:1px solid rgba(34,211,165,.4); color:#22d3a5; }
+    .sl-prusa   { background:rgba(76,154,255,.12); border:1px solid rgba(76,154,255,.4); color:#4c9aff; }
+    .sl-cura    { background:rgba(168,85,247,.12); border:1px solid rgba(168,85,247,.4); color:#a855f7; }
+    .sl-creality{ background:rgba(239,68,68,.12);  border:1px solid rgba(239,68,68,.4);  color:#f87171; }
+    .sl-anycubic{ background:rgba(234,179,8,.12);  border:1px solid rgba(234,179,8,.4);  color:#fbbf24; }
+    .sl-unk     { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.2); color:#9999b0; }
     .hl-green { color:#4ade80; font-weight:700; }
     /* Reset button */
     .reset-btn { background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#f87171; border-radius:16px; padding:12px 20px; font-size:14px; font-weight:600; cursor:pointer; width:100%; transition:background 0.2s; }
@@ -136,6 +138,8 @@
     <button type="button" class="currency-btn active" data-currency="₽" aria-pressed="true">₽</button>
     <button type="button" class="currency-btn" data-currency="$" aria-pressed="false">$</button>
     <button type="button" class="currency-btn" data-currency="€" aria-pressed="false">€</button>
+    <button type="button" class="currency-btn" data-currency="₸" aria-pressed="false">₸</button>
+    <button type="button" class="currency-btn" data-currency="Br" aria-pressed="false">Br</button>
   </div>
 
   <!-- Вкладки -->
@@ -322,6 +326,8 @@
         <span class="sl-badge sl-orca">OrcaSlicer</span>
         <span class="sl-badge sl-prusa">PrusaSlicer</span>
         <span class="sl-badge sl-cura">Cura</span>
+        <span class="sl-badge sl-creality">Creality Print</span>
+        <span class="sl-badge sl-anycubic">Anycubic Slicer</span>
       </div>
 
       <div id="dropZone" class="drop-zone">
@@ -414,21 +420,29 @@
   })();
   let rateRubPerUsd = 92;
   let rateRubPerEur = 100;
+  let rateRubPerKzt = 0.155; // ~1 KZT = 0.155 RUB (1 RUB ≈ 6.44 KZT)
+  let rateRubPerByr = 28.5;  // ~1 BYN = 28.5 RUB
 
   function rubToCurrent(rub) {
-    if (selectedCurrency === '$') return rub / rateRubPerUsd;
-    if (selectedCurrency === '€') return rub / rateRubPerEur;
+    if (selectedCurrency === '$')  return rub / rateRubPerUsd;
+    if (selectedCurrency === '€')  return rub / rateRubPerEur;
+    if (selectedCurrency === '₸')  return rub / rateRubPerKzt;
+    if (selectedCurrency === 'Br') return rub / rateRubPerByr;
     return rub;
   }
   function currentToRub(val) {
-    if (selectedCurrency === '$') return val * rateRubPerUsd;
-    if (selectedCurrency === '€') return val * rateRubPerEur;
+    if (selectedCurrency === '$')  return val * rateRubPerUsd;
+    if (selectedCurrency === '€')  return val * rateRubPerEur;
+    if (selectedCurrency === '₸')  return val * rateRubPerKzt;
+    if (selectedCurrency === 'Br') return val * rateRubPerByr;
     return val;
   }
 
   function formatMoney(value) {
     const n = Number(value) || 0;
     if (selectedCurrency === '₽') return Number(n.toFixed(0)).toLocaleString('ru-RU') + ' ₽';
+    if (selectedCurrency === '₸') return Number(n.toFixed(0)).toLocaleString('ru-RU') + ' ₸';
+    if (selectedCurrency === 'Br') return n.toFixed(2) + ' Br';
     return n.toFixed(2) + ' ' + selectedCurrency;
   }
 
@@ -441,37 +455,35 @@
     { el: customWear,      dec: 1 },
   ];
 
+  function toRub(val, cur) {
+    if (cur === '$')  return val * rateRubPerUsd;
+    if (cur === '€')  return val * rateRubPerEur;
+    if (cur === '₸')  return val * rateRubPerKzt;
+    if (cur === 'Br') return val * rateRubPerByr;
+    return val;
+  }
+  function fromRub(rub, cur) {
+    if (cur === '$')  return rub / rateRubPerUsd;
+    if (cur === '€')  return rub / rateRubPerEur;
+    if (cur === '₸')  return rub / rateRubPerKzt;
+    if (cur === 'Br') return rub / rateRubPerByr;
+    return rub;
+  }
+
   function convertMoneyFields(fromCurrency, toCurrency) {
-    // Переводим значения из fromCurrency в toCurrency
     MONEY_FIELDS.forEach(function(f) {
       const v = parseFloat(f.el.value) || 0;
       if (v === 0) return;
-      // сначала в рубли
-      let rub;
-      if (fromCurrency === '$') rub = v * rateRubPerUsd;
-      else if (fromCurrency === '€') rub = v * rateRubPerEur;
-      else rub = v;
-      // потом в новую валюту
-      let newVal;
-      if (toCurrency === '$') newVal = rub / rateRubPerUsd;
-      else if (toCurrency === '€') newVal = rub / rateRubPerEur;
-      else newVal = rub;
-      f.el.value = parseFloat(newVal.toFixed(f.dec));
+      const rub = toRub(v, fromCurrency);
+      f.el.value = parseFloat(fromRub(rub, toCurrency).toFixed(f.dec));
     });
-    // Цены по цветам
     filaments.forEach(function(fil, i) {
       const inp = document.getElementById('fp-' + i);
       if (!inp) return;
       const v = parseFloat(inp.value) || 0;
       if (v === 0) return;
-      let rub;
-      if (fromCurrency === '$') rub = v * rateRubPerUsd;
-      else if (fromCurrency === '€') rub = v * rateRubPerEur;
-      else rub = v;
-      let newVal;
-      if (toCurrency === '$') newVal = rub / rateRubPerUsd;
-      else if (toCurrency === '€') newVal = rub / rateRubPerEur;
-      else newVal = rub;
+      const rub = toRub(v, fromCurrency);
+      const newVal = fromRub(rub, toCurrency);
       inp.value = parseFloat(newVal.toFixed(1));
       fil.priceInCur = parseFloat(newVal.toFixed(1));
     });
@@ -493,6 +505,8 @@
         if (data && data.rates) {
           if (data.rates.USD > 0) rateRubPerUsd = 1 / data.rates.USD;
           if (data.rates.EUR > 0) rateRubPerEur = 1 / data.rates.EUR;
+          if (data.rates.KZT > 0) rateRubPerKzt = 1 / data.rates.KZT;
+          if (data.rates.BYN > 0) rateRubPerByr = 1 / data.rates.BYN;
         }
         update();
       }).catch(function() { update(); });
@@ -730,18 +744,22 @@
   const PAL = ['#e74c3c','#3498db','#f1c40f','#2ecc71','#9b59b6','#e67e22','#1abc9c','#e91e63','#ff5722','#607d8b'];
 
   const SLICER_INFO = {
-    bambu: { icon: '🟠', label: 'Bambu Studio', cls: 'sl-bambu' },
-    orca:  { icon: '🟢', label: 'OrcaSlicer',   cls: 'sl-orca'  },
-    prusa: { icon: '🔵', label: 'PrusaSlicer',  cls: 'sl-prusa' },
-    cura:  { icon: '🟣', label: 'Cura',         cls: 'sl-cura'  },
-    unknown:{ icon:'⬜', label: 'Слайсер не определён', cls: 'sl-unk' },
+    bambu:    { icon: '🟠', label: 'Bambu Studio',    cls: 'sl-bambu' },
+    orca:     { icon: '🟢', label: 'OrcaSlicer',      cls: 'sl-orca'  },
+    prusa:    { icon: '🔵', label: 'PrusaSlicer',     cls: 'sl-prusa' },
+    cura:     { icon: '🟣', label: 'Cura',            cls: 'sl-cura'  },
+    creality: { icon: '🔴', label: 'Creality Print',  cls: 'sl-creality' },
+    anycubic: { icon: '🟡', label: 'Anycubic Slicer', cls: 'sl-anycubic' },
+    unknown:  { icon: '⬜', label: 'Слайсер не определён', cls: 'sl-unk' },
   };
 
   function detectSlicer(text) {
-    if (/bambu_studio|BambuStudio|X-BBL-Client/i.test(text)) return 'bambu';
-    if (/OrcaSlicer|orca_slicer|SoftFever/i.test(text))      return 'orca';
-    if (/PrusaSlicer|prusa_slicer|SuperSlicer/i.test(text))  return 'prusa';
-    if (/Cura_SteamEngine|Ultimaker Cura/i.test(text))       return 'cura';
+    if (/bambu_studio|BambuStudio|X-BBL-Client/i.test(text))       return 'bambu';
+    if (/OrcaSlicer|orca_slicer|SoftFever/i.test(text))            return 'orca';
+    if (/PrusaSlicer|prusa_slicer|SuperSlicer/i.test(text))        return 'prusa';
+    if (/Cura_SteamEngine|Ultimaker Cura/i.test(text))             return 'cura';
+    if (/Creality Print|CXEngine|CRSLICE/i.test(text))             return 'creality';
+    if (/AnycubicSlicer|Anycubic_Slicer|anycubic.*slicer/i.test(text)) return 'anycubic';
     return 'unknown';
   }
 
