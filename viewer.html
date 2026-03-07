@@ -687,24 +687,38 @@
     document.getElementById('progFill').style.width=p+'%';
   }
 
-  // ЭКСПОРТ
+  // ЭКСПОРТ (совместимо с Telegram WebApp)
   window.doExport=function(src,fmt){
     const geo=src==='vox'?getVoxGeo():mainGeo;
     if(!geo){showToast('Нет модели');return;}
+
     const base=(document.getElementById('hudName').textContent||'model').replace(/\.[^.]+$/,'');
     const sfx=src==='vox'?'_vox':'';
     let blob,name;
-    if(fmt==='stl'){blob=new Blob([toSTL(geo)],{type:'application/octet-stream'});name=base+sfx+'.stl';}
-    else if(fmt==='obj'){blob=new Blob([toOBJ(geo)],{type:'text/plain'});name=base+sfx+'.obj';}
-    else{blob=new Blob([toGLB(geo)],{type:'model/gltf-binary'});name=base+'.glb';}
+
+    // Всегда используем application/octet-stream, чтобы форсировать скачивание
+    const mime='application/octet-stream';
+    if(fmt==='stl'){
+      blob=new Blob([toSTL(geo)],{type:mime});
+      name=base+sfx+'.stl';
+    }else if(fmt==='obj'){
+      blob=new Blob([toOBJ(geo)],{type:mime});
+      name=base+sfx+'.obj';
+    }else{
+      blob=new Blob([toGLB(geo)],{type:mime});
+      name=base+'.glb';
+    }
+
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
     a.href=url;
     a.download=name;
-    // Для мобильных и webview (в т.ч. Telegram) надёжнее кликать по добавленной в DOM ссылке
+
+    // Для мобильных WebView (Telegram, iOS/Android) ссылка должна быть в DOM
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+
     setTimeout(()=>URL.revokeObjectURL(url),1000);
     showToast('💾 '+name);
   };
