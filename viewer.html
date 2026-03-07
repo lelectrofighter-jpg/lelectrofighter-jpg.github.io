@@ -1,0 +1,1447 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>VoxelDrop | Печатники и Печатницы</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js"></script>
+  <style>
+    :root {
+      --bg: #080c14;
+      --surface: rgba(255,255,255,0.055);
+      --surface-hi: rgba(255,255,255,0.09);
+      --border: rgba(255,255,255,0.1);
+      --border-hi: rgba(255,255,255,0.2);
+      --text: #f0f4ff;
+      --muted: #6b7a99;
+      --accent: #7c6fff;
+      --accent-glow: rgba(124,111,255,0.35);
+      --green: #2dd98f;
+      --green-glow: rgba(45,217,143,0.3);
+      --safe: env(safe-area-inset-bottom, 0px);
+      --font-head: 'Syne', sans-serif;
+      --font-body: 'DM Sans', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      height: 100%; overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      touch-action: none;
+      -webkit-user-select: none; user-select: none;
+    }
+
+    /* ── ФОНОВЫЕ СВЕЧЕНИЯ ── */
+    body::before {
+      content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 70% 55% at 10% 10%, rgba(90,70,220,0.22) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 90% 85%, rgba(45,217,143,0.1) 0%, transparent 55%),
+        radial-gradient(ellipse 40% 30% at 60% 40%, rgba(124,111,255,0.08) 0%, transparent 50%);
+    }
+
+    /* ── CANVAS ── */
+    #canvas-wrap { position: fixed; inset: 0; z-index: 1; }
+    #canvas-wrap canvas { width: 100% !important; height: 100% !important; display: block; }
+
+    /* ══════════════════════════════════════
+       UPLOAD SCREEN
+    ══════════════════════════════════════ */
+    #screen-upload {
+      position: fixed; inset: 0; z-index: 10;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 20px; padding: 24px;
+      padding-bottom: calc(24px + var(--safe));
+    }
+
+    .brand {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+    .brand-badge {
+      display: flex; align-items: center; gap: 7px;
+      background: rgba(124,111,255,0.12);
+      border: 1px solid rgba(124,111,255,0.3);
+      border-radius: 100px; padding: 4px 12px 4px 8px;
+      font-family: var(--font-head); font-size: 11px; font-weight: 700;
+      color: #a89fff; letter-spacing: 0.08em; text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .brand-badge-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent); box-shadow: 0 0 8px var(--accent);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(0.8)} }
+    .brand-title {
+      font-family: var(--font-head); font-size: clamp(1.6rem, 7vw, 2.2rem);
+      font-weight: 800; letter-spacing: -0.04em; line-height: 1;
+      background: linear-gradient(135deg, #fff 0%, #a89fff 60%, var(--green) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .brand-sub { font-size: 12px; color: var(--muted); letter-spacing: 0.02em; }
+
+    .drop-zone {
+      position: relative; width: 100%; max-width: 360px;
+      border: 1.5px dashed rgba(124,111,255,0.3); border-radius: 28px;
+      padding: clamp(1.8rem, 7vw, 2.8rem) 1.5rem; text-align: center;
+      background: rgba(124,111,255,0.05);
+      backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+      cursor: pointer; transition: all 0.25s;
+      overflow: hidden;
+    }
+    .drop-zone::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(124,111,255,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .drop-zone:active, .drop-zone.drag-over {
+      border-color: rgba(124,111,255,0.7);
+      background: rgba(124,111,255,0.1);
+      transform: scale(0.99);
+      box-shadow: 0 0 40px rgba(124,111,255,0.15), inset 0 0 30px rgba(124,111,255,0.05);
+    }
+    .drop-zone input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+    .drop-icon {
+      font-size: clamp(2.2rem, 9vw, 3.2rem); margin-bottom: 12px; display: block;
+      filter: drop-shadow(0 0 16px rgba(124,111,255,0.5));
+    }
+    .drop-title {
+      font-family: var(--font-head); font-size: clamp(1rem, 4vw, 1.15rem);
+      font-weight: 700; margin-bottom: 5px; color: var(--text);
+    }
+    .drop-sub { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+    .fmt-row { display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; }
+    .fmt {
+      padding: 3px 10px; border-radius: 100px; font-size: 10px; font-weight: 700;
+      font-family: var(--font-head); letter-spacing: 0.05em;
+      background: rgba(124,111,255,0.15); border: 1px solid rgba(124,111,255,0.3); color: #a89fff;
+    }
+    .privacy-note { font-size: 10px; color: rgba(107,122,153,0.6); letter-spacing: 0.02em; }
+    .upload-footer { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 360px; }
+    .upload-footer-links { display: flex; gap: 8px; }
+    .uf-btn {
+      flex: 1; padding: 10px 8px; border-radius: 14px; text-decoration: none;
+      text-align: center; font-family: var(--font-head); font-size: 12px; font-weight: 700;
+      border: 1px solid var(--border); background: var(--surface);
+      backdrop-filter: blur(16px); color: var(--text); transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+    }
+    .uf-btn:active { background: var(--surface-hi); transform: scale(0.97); }
+    .uf-btn.donate {
+      background: rgba(251,191,36,0.1); border-color: rgba(251,191,36,0.35); color: #fbbf24;
+    }
+    .uf-btn.calc {
+      background: rgba(45,217,143,0.08); border-color: rgba(45,217,143,0.25); color: var(--green);
+    }
+    .uf-copyright { font-size: 10px; color: rgba(107,122,153,0.5); text-align: center; letter-spacing: 0.02em; }
+
+    /* ══════════════════════════════════════
+       HUD
+    ══════════════════════════════════════ */
+    #hud { position: fixed; inset: 0; z-index: 20; pointer-events: none; display: none; }
+
+    /* TOP BAR */
+    .hud-top {
+      position: absolute; top: 10px; left: 10px; right: 10px;
+      display: flex; gap: 7px; pointer-events: auto;
+    }
+    .hud-name-card {
+      flex: 1; min-width: 0;
+      background: rgba(8,12,20,0.75); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--border); border-radius: 16px; padding: 8px 14px;
+      display: flex; flex-direction: column; justify-content: center;
+    }
+    .hud-name {
+      font-family: var(--font-head); font-size: 12px; font-weight: 700;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text);
+    }
+    .hud-fmt { font-size: 10px; color: var(--muted); margin-top: 1px; font-family: var(--font-body); }
+
+    .icon-btn {
+      width: 40px; height: 40px; border-radius: 13px;
+      border: 1px solid var(--border);
+      background: rgba(8,12,20,0.75); backdrop-filter: blur(16px);
+      color: var(--text); font-size: 14px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      transition: all 0.15s;
+    }
+    .icon-btn:active { background: var(--surface-hi); transform: scale(0.92); }
+    .icon-btn.danger { border-color: rgba(239,68,68,0.25); background: rgba(239,68,68,0.1); color: #f87171; }
+    .icon-btn.danger:active { background: rgba(239,68,68,0.2); }
+
+    .touch-hint {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      background: rgba(8,12,20,0.8); backdrop-filter: blur(20px);
+      border: 1px solid var(--border); border-radius: 14px; padding: 8px 16px;
+      font-size: 11px; color: var(--muted); pointer-events: none;
+      transition: opacity 0.8s; white-space: nowrap;
+    }
+
+    /* BOTTOM PANEL */
+    .hud-bottom {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      padding: 8px 10px; padding-bottom: calc(8px + var(--safe));
+      pointer-events: auto;
+    }
+
+    /* INFO CARDS */
+    .info-grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 5px; margin-bottom: 5px; }
+    .info-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 5px; }
+    .ic {
+      background: rgba(8,12,20,0.78); backdrop-filter: blur(20px);
+      border: 1px solid var(--border); border-radius: 14px;
+      padding: 8px 10px; text-align: center; position: relative; overflow: hidden;
+    }
+    .ic::after {
+      content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(124,111,255,0.3), transparent);
+    }
+    .ic-label {
+      font-size: 9px; color: var(--muted); text-transform: uppercase;
+      letter-spacing: 0.07em; margin-bottom: 3px; font-family: var(--font-head);
+    }
+    .ic-val {
+      font-family: var(--font-head); font-size: clamp(14px,4vw,16px);
+      font-weight: 800; color: var(--green); line-height: 1;
+    }
+    .ic-unit { font-size: 9px; color: var(--muted); margin-top: 1px; }
+
+    /* COLOR SWATCHES */
+    .color-bar {
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(8,12,20,0.78); backdrop-filter: blur(20px);
+      border: 1px solid var(--border); border-radius: 14px;
+      padding: 8px 12px; margin-bottom: 5px;
+    }
+    .color-bar-label { font-size: 11px; color: var(--muted); flex: 1; font-family: var(--font-body); }
+    .swatches { display: flex; gap: 6px; }
+    .sw {
+      width: clamp(20px,5.5vw,23px); height: clamp(20px,5.5vw,23px);
+      border-radius: 50%; cursor: pointer;
+      border: 2px solid transparent; transition: all 0.15s; flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+    .sw:active { transform: scale(1.35); }
+    .sw.active { border-color: white; transform: scale(1.28); box-shadow: 0 0 12px rgba(255,255,255,0.3); }
+
+    /* VOX SLIDER */
+    .vox-slider-row {
+      display: none; align-items: center; gap: 10px;
+      background: rgba(8,12,20,0.78); backdrop-filter: blur(20px);
+      border: 1px solid rgba(124,111,255,0.2); border-radius: 14px;
+      padding: 8px 12px; margin-bottom: 5px;
+    }
+    .vox-slider-label {
+      font-size: 11px; color: var(--muted); flex-shrink: 0;
+      font-family: var(--font-head); font-weight: 600;
+    }
+    .vox-slider-row input[type=range] {
+      flex: 1; accent-color: var(--accent); height: 20px; cursor: pointer;
+      -webkit-appearance: none; background: transparent;
+    }
+    .vox-slider-row input[type=range]::-webkit-slider-runnable-track {
+      height: 3px; border-radius: 3px;
+      background: linear-gradient(90deg, var(--accent) 0%, rgba(124,111,255,0.2) 0%);
+    }
+    .vox-slider-row input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
+      background: var(--accent); margin-top: -6.5px;
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+    .vox-slider-val {
+      font-family: var(--font-head); font-size: 13px; font-weight: 800;
+      color: var(--accent); width: 28px; text-align: right; flex-shrink: 0;
+    }
+
+    /* EXPORT PANEL */
+    .exp-panel {
+      display: none;
+      background: rgba(8,12,20,0.9); backdrop-filter: blur(28px);
+      border: 1px solid var(--border); border-radius: 18px;
+      padding: 14px; margin-bottom: 5px;
+    }
+    .exp-panel.open { display: block; }
+    .exp-title {
+      font-family: var(--font-head); font-size: 12px; font-weight: 700;
+      margin-bottom: 10px; color: var(--green);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .exp-sec {
+      font-size: 9px; color: var(--muted); margin-bottom: 6px;
+      text-transform: uppercase; letter-spacing: 0.08em; font-family: var(--font-head);
+    }
+    .exp-btns { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 10px; }
+    .exp-btn {
+      padding: 7px 14px; border-radius: 10px; cursor: pointer;
+      font-family: var(--font-head); font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+      transition: all 0.15s; border: 1px solid transparent;
+    }
+    .exp-btn:active { transform: scale(0.95); }
+    .exp-btn.stl { border-color: rgba(45,217,143,0.35); color: var(--green); background: rgba(45,217,143,0.08); }
+    .exp-btn.stl:active { background: rgba(45,217,143,0.18); box-shadow: 0 0 16px var(--green-glow); }
+    .exp-btn.obj { border-color: rgba(251,191,36,0.35); color: #fbbf24; background: rgba(251,191,36,0.08); }
+    .exp-btn.obj:active { background: rgba(251,191,36,0.18); }
+    .exp-btn.glb { border-color: rgba(124,111,255,0.35); color: #a89fff; background: rgba(124,111,255,0.08); }
+    .exp-btn.glb:active { background: rgba(124,111,255,0.2); box-shadow: 0 0 16px var(--accent-glow); }
+
+    /* MAIN BUTTONS */
+    .btn-row { display: flex; gap: 5px; }
+    .btn {
+      flex: 1; padding: 0 4px;
+      border-radius: 13px; border: 1px solid var(--border);
+      background: rgba(8,12,20,0.78); backdrop-filter: blur(16px);
+      color: var(--text); cursor: pointer; transition: all 0.15s;
+      font-family: var(--font-head); font-size: clamp(9px,2.8vw,11px); font-weight: 700;
+      letter-spacing: 0.01em; text-align: center;
+      min-height: 46px; display: flex; align-items: center; justify-content: center;
+    }
+    .btn:active { background: var(--surface-hi); transform: scale(0.96); }
+
+    .btn-vox {
+      background: rgba(124,111,255,0.12);
+      border-color: rgba(124,111,255,0.3); color: #c4bbff;
+    }
+    .btn-vox:active { box-shadow: 0 0 20px var(--accent-glow); }
+    .btn-vox.on {
+      background: rgba(124,111,255,0.25);
+      border-color: rgba(124,111,255,0.6); color: #d4cfff;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+    .btn-exp {
+      background: rgba(45,217,143,0.08);
+      border-color: rgba(45,217,143,0.25); color: var(--green);
+    }
+    .btn-exp:active { box-shadow: 0 0 16px var(--green-glow); }
+
+    /* LOADING */
+    #loading {
+      position: fixed; inset: 0; z-index: 50;
+      display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+      background: rgba(8,12,20,0.88); backdrop-filter: blur(16px);
+    }
+    #loading.show { display: flex; }
+    .spinner {
+      width: 44px; height: 44px; border-radius: 50%;
+      border: 2px solid rgba(124,111,255,0.15);
+      border-top-color: var(--accent);
+      box-shadow: 0 0 20px var(--accent-glow);
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-msg {
+      font-family: var(--font-head); font-size: 13px; font-weight: 600;
+      color: var(--muted); letter-spacing: 0.05em;
+    }
+    .prog-wrap {
+      width: 160px; height: 2px;
+      background: rgba(255,255,255,0.07); border-radius: 2px; overflow: hidden;
+    }
+    .prog-fill {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--green));
+      border-radius: 2px; transition: width 0.08s;
+    }
+
+    /* TOAST */
+    .toast {
+      position: fixed; left: 50%; bottom: calc(76px + var(--safe)); z-index: 60;
+      transform: translateX(-50%) translateY(8px); opacity: 0;
+      background: rgba(8,12,20,0.92); backdrop-filter: blur(20px);
+      border: 1px solid var(--border); border-radius: 14px;
+      padding: 9px 18px; font-size: 12px; color: var(--muted);
+      white-space: nowrap; transition: all 0.2s; pointer-events: none;
+      max-width: 90vw; text-align: center; font-family: var(--font-body);
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* Обновление трека слайдера при вводе */
+    input[type=range] { touch-action: none; }
+
+    /* ── BOTTOM TABS ── */
+    .bottom-tabs {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
+      display: none; /* показываем только когда нет HUD */
+      padding: 0 10px; padding-bottom: calc(6px + var(--safe));
+      background: rgba(8,12,20,0.85); backdrop-filter: blur(24px);
+      border-top: 1px solid var(--border);
+    }
+    .bottom-tabs.visible { display: flex; }
+    .tab-bar { display: flex; width: 100%; gap: 4px; padding: 8px 0; }
+    .tab-btn {
+      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+      padding: 8px 4px; border-radius: 12px; border: none; background: transparent;
+      color: var(--muted); cursor: pointer; transition: all 0.2s; font-family: var(--font-head);
+    }
+    .tab-btn:active { background: var(--surface); }
+    .tab-btn.active { color: var(--accent); }
+    .tab-btn.active .tab-icon { filter: drop-shadow(0 0 6px var(--accent-glow)); }
+    .tab-icon { font-size: 20px; line-height: 1; }
+    .tab-label { font-size: 9px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+
+    /* ── SCANNER SCREEN ── */
+    #screen-scanner {
+      position: fixed; inset: 0; z-index: 10; display: none;
+      flex-direction: column; align-items: center; justify-content: flex-start;
+      padding: 10px 10px 80px;
+      padding-bottom: calc(80px + var(--safe));
+      overflow-y: auto;
+    }
+    #screen-scanner.active { display: flex; }
+
+    .scanner-title {
+      font-family: var(--font-head); font-size: 18px; font-weight: 800;
+      letter-spacing: -0.03em; margin: 10px 0 4px;
+      background: linear-gradient(135deg, #fff 0%, #a89fff 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .scanner-sub { font-size: 12px; color: var(--muted); margin-bottom: 14px; text-align: center; }
+
+    .scan-preview-wrap {
+      position: relative; width: 100%; max-width: 400px;
+      border-radius: 20px; overflow: hidden;
+      border: 1px solid var(--border); background: rgba(0,0,0,0.4);
+      aspect-ratio: 4/3;
+    }
+    #scanVideo, #scanCanvas {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    #scanCanvas { position: absolute; top: 0; left: 0; display: none; }
+    #depthCanvas {
+      width: 100%; border-radius: 16px; display: none;
+      border: 1px solid rgba(124,111,255,0.3); margin-top: 8px;
+      max-width: 400px;
+    }
+    #scan3dCanvas { display: none; border-radius: 16px; max-width: 400px; width: 100%; margin-top: 8px; }
+
+    .scan-overlay-hint {
+      position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+      background: rgba(8,12,20,0.75); backdrop-filter: blur(12px);
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 5px 12px; font-size: 11px; color: var(--muted); white-space: nowrap;
+    }
+    .scan-corner {
+      position: absolute; width: 24px; height: 24px;
+      border-color: var(--accent); border-style: solid; border-width: 0;
+    }
+    .scan-corner.tl { top: 10px; left: 10px; border-top-width: 2px; border-left-width: 2px; border-radius: 4px 0 0 0; }
+    .scan-corner.tr { top: 10px; right: 10px; border-top-width: 2px; border-right-width: 2px; border-radius: 0 4px 0 0; }
+    .scan-corner.bl { bottom: 10px; left: 10px; border-bottom-width: 2px; border-left-width: 2px; border-radius: 0 0 0 4px; }
+    .scan-corner.br { bottom: 10px; right: 10px; border-bottom-width: 2px; border-right-width: 2px; border-radius: 0 0 4px 0; }
+
+    .scan-line {
+      position: absolute;
+      left: 6%; right: 6%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      box-shadow: 0 0 12px var(--accent-glow);
+      opacity: 0;
+      transform: translateY(-10%);
+      pointer-events: none;
+      will-change: transform, opacity;
+    }
+    .scan-line.active {
+      opacity: 1;
+      animation: scan-line-move 1.4s linear infinite;
+    }
+    @keyframes scan-line-move {
+      0% { transform: translateY(-10%); }
+      100% { transform: translateY(110%); }
+    }
+
+    .scan-actions { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 400px; margin-top: 10px; }
+    .scan-btn {
+      width: 100%; padding: 13px; border-radius: 16px; border: none; cursor: pointer;
+      font-family: var(--font-head); font-size: 13px; font-weight: 700; letter-spacing: 0.03em;
+      transition: all 0.15s;
+    }
+    .scan-btn:active { transform: scale(0.98); opacity: 0.85; }
+    .scan-btn.primary {
+      background: linear-gradient(135deg, var(--accent), #9c8fff);
+      color: white; box-shadow: 0 4px 24px var(--accent-glow);
+    }
+    .scan-btn.secondary {
+      background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    }
+    .scan-btn.success {
+      background: linear-gradient(135deg, #1a9e6a, var(--green));
+      color: white; box-shadow: 0 4px 20px var(--green-glow);
+    }
+    .scan-btn:disabled { opacity: 0.4; pointer-events: none; }
+
+    .depth-label {
+      font-family: var(--font-head); font-size: 11px; font-weight: 700;
+      color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em;
+      margin-top: 10px; margin-bottom: 4px; width: 100%; max-width: 400px;
+    }
+    .scan-info-row {
+      display: flex; gap: 8px; width: 100%; max-width: 400px; margin-top: 8px;
+    }
+    .scan-info-card {
+      flex: 1; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 8px; text-align: center;
+    }
+    .scan-info-card .ic-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-family: var(--font-head); }
+    .scan-info-card .ic-val { font-family: var(--font-head); font-size: 14px; font-weight: 800; color: var(--accent); margin-top: 2px; }
+
+    .model-status {
+      font-size: 12px; color: var(--muted); text-align: center; margin-top: 6px;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+
+<div id="canvas-wrap"></div>
+
+<!-- UPLOAD SCREEN -->
+<div id="screen-upload">
+  <div class="brand">
+    <div class="brand-badge">
+      <div class="brand-badge-dot"></div>
+      Печатники и Печатницы
+    </div>
+    <div class="brand-title">VoxelDrop</div>
+    <div class="brand-sub">Вокселизация 3D моделей · Экспорт</div>
+  </div>
+
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept=".stl,.3mf,.obj,.glb,.gltf">
+    <span class="drop-icon">🖨️</span>
+    <div class="drop-title">Загрузите 3D модель</div>
+    <div class="drop-sub">Перетащите или нажмите для выбора</div>
+    <div class="fmt-row">
+      <span class="fmt">STL</span><span class="fmt">3MF</span>
+      <span class="fmt">OBJ</span><span class="fmt">GLB</span>
+    </div>
+  </div>
+  <div class="upload-footer">
+    <div class="upload-footer-links">
+      <a href="https://t.me/pechatnikjurec" target="_blank" class="uf-btn">📢 Канал</a>
+      <a href="https://t.me/pechatnikovchat" target="_blank" class="uf-btn">💬 Чат</a>
+      <a href="https://www.donationalerts.com/r/electrofighters" target="_blank" class="uf-btn donate">☕ Donate</a>
+    </div>
+    <a href="index.html" class="uf-btn calc">🧮 Калькулятор себестоимости</a>
+    <div class="uf-copyright">Всё локально · никаких серверов · © 2025 Печатники и Печатницы</div>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-top">
+    <div class="hud-name-card">
+      <div class="hud-name" id="hudName">model.stl</div>
+      <div class="hud-fmt" id="hudFmt">STL</div>
+    </div>
+    <button class="icon-btn danger" id="btnClose">✕</button>
+  </div>
+
+  <div class="touch-hint" id="touchHint">☝️ Вращайте · щипок = зум</div>
+
+  <div class="hud-bottom">
+    <div class="info-grid-3">
+      <div class="ic"><div class="ic-label">Ширина</div><div class="ic-val" id="iW">—</div><div class="ic-unit">мм</div></div>
+      <div class="ic"><div class="ic-label">Глубина</div><div class="ic-val" id="iD">—</div><div class="ic-unit">мм</div></div>
+      <div class="ic"><div class="ic-label">Высота</div><div class="ic-val" id="iH">—</div><div class="ic-unit">мм</div></div>
+    </div>
+    <div class="info-grid-2">
+      <div class="ic"><div class="ic-label">Объём</div><div class="ic-val" id="iVol">—</div><div class="ic-unit">см³</div></div>
+      <div class="ic"><div class="ic-label">Вес PLA</div><div class="ic-val" id="iWt">—</div><div class="ic-unit">г</div></div>
+    </div>
+    <div class="color-bar">
+      <span class="color-bar-label">🎨 Цвет модели</span>
+      <div class="swatches" id="swatches"></div>
+    </div>
+
+    <!-- Ползунок вокселей -->
+    <div class="vox-slider-row" id="voxSliderRow">
+      <span class="vox-slider-label">◈ Размер</span>
+      <input type="range" id="voxSizeSlider" min="20" max="120" value="80" step="5">
+      <span class="vox-slider-val" id="voxSizeVal">80</span>
+    </div>
+
+    <!-- Экспорт -->
+    <div class="exp-panel" id="expPanel">
+      <div class="exp-title">💾 Скачать</div>
+      <div class="exp-sec">Оригинал</div>
+      <div class="exp-btns">
+        <button class="exp-btn stl" onclick="doExport('orig','stl')">STL</button>
+        <button class="exp-btn obj" onclick="doExport('orig','obj')">OBJ</button>
+        <button class="exp-btn glb" onclick="doExport('orig','glb')">GLB</button>
+      </div>
+      <div id="expVoxRow" style="display:none">
+        <div class="exp-sec">Воксели</div>
+        <div class="exp-btns">
+          <button class="exp-btn stl" onclick="doExport('vox','stl')">STL</button>
+          <button class="exp-btn obj" onclick="doExport('vox','obj')">OBJ</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn" id="btnScanHud">📷 SCAN</button>
+      <button class="btn" id="btnReset">🔄 Сброс</button>
+      <button class="btn" id="btnWire">⬡ Сетка</button>
+      <button class="btn btn-vox" id="btnVox">◈ Воксели</button>
+      <button class="btn btn-exp" id="btnExp">💾 Скачать</button>
+      <button class="btn" id="btnNew">📂</button>
+      <a href="index.html" class="btn" style="background:rgba(45,217,143,0.08);border-color:rgba(45,217,143,0.25);color:#2dd98f;text-decoration:none;flex:1;" title="Калькулятор">🧮</a>
+    </div>
+  </div>
+</div>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <div class="loading-msg" id="loadMsg">Загружаю…</div>
+  <div class="prog-wrap" id="progWrap"><div class="prog-fill" id="progFill"></div></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<!-- BOTTOM TABS (только на upload screen) -->
+<div class="bottom-tabs" id="bottomTabs">
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tabFile" onclick="switchTab('file')">
+      <span class="tab-icon">📁</span>
+      <span class="tab-label">Файл</span>
+    </button>
+    <button class="tab-btn" id="tabScan" onclick="switchTab('scan')">
+      <span class="tab-icon">📷</span>
+      <span class="tab-label">Скан</span>
+    </button>
+  </div>
+</div>
+
+<!-- SCANNER SCREEN -->
+<div id="screen-scanner">
+  <div class="scanner-title">📷 3D Скан</div>
+  <div class="scanner-sub">Сфотографируй объект — получи 3D модель</div>
+
+  <div class="scan-preview-wrap" id="scanPreviewWrap">
+    <video id="scanVideo" autoplay playsinline muted></video>
+    <canvas id="scanCanvas"></canvas>
+    <div class="scan-corner tl"></div>
+    <div class="scan-corner tr"></div>
+    <div class="scan-corner bl"></div>
+    <div class="scan-corner br"></div>
+    <div class="scan-overlay-hint" id="scanHint">Наведи на объект</div>
+    <div class="scan-line" id="scanLine"></div>
+  </div>
+
+  <canvas id="depthCanvas"></canvas>
+  <canvas id="scan3dCanvas"></canvas>
+
+  <div class="scan-info-row" id="scanInfoRow" style="display:none">
+    <div class="scan-info-card"><div class="ic-label">Ширина</div><div class="ic-val" id="sW">—</div></div>
+    <div class="scan-info-card"><div class="ic-label">Высота</div><div class="ic-val" id="sH">—</div></div>
+    <div class="scan-info-card"><div class="ic-label">Точек</div><div class="ic-val" id="sPts">—</div></div>
+  </div>
+
+  <div class="model-status" id="modelStatus"></div>
+
+  <div class="scan-actions">
+    <button class="scan-btn primary" id="btnCapture">📸 Сделать снимок</button>
+    <button class="scan-btn secondary" id="btnBuildDepth" style="display:none">🧠 Построить глубину</button>
+    <button class="scan-btn success" id="btnSendToVoxel" style="display:none">📦 Открыть в VoxelDrop</button>
+    <button class="scan-btn secondary" id="btnRescan" style="display:none">🔄 Переснять</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const tg=window.Telegram?.WebApp;if(tg){tg.ready();tg.expand();}
+
+  const COLORS=['#e8e8e8','#1c1c1c','#ef4444','#3b82f6','#f59e0b','#22c55e','#f97316','#a855f7'];
+  let curColor=COLORS[0];
+  function buildSwatches(){
+    const w=document.getElementById('swatches');w.innerHTML='';
+    COLORS.forEach(c=>{
+      const el=document.createElement('div');el.className='sw'+(c===curColor?' active':'');
+      el.style.background=c;if(c==='#1c1c1c')el.style.outline='1px solid rgba(255,255,255,0.15)';
+      el.addEventListener('click',()=>{curColor=c;if(mainMat)mainMat.color.set(c);if(voxMat)voxMat.color.set(c);buildSwatches();});
+      w.appendChild(el);
+    });
+  }
+
+  // THREE
+  let scene,camera,renderer,mainMesh,mainMat,mainGeo,voxMesh,voxMat;
+  let wireMode=false,showVox=false;
+  const center=new THREE.Vector3();
+
+  function initThree(){
+    const wrap=document.getElementById('canvas-wrap');
+    scene=new THREE.Scene();
+    camera=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,0.001,1e6);
+    renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});
+    renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+    renderer.setSize(innerWidth,innerHeight);
+    renderer.setClearColor(0,0);
+    wrap.appendChild(renderer.domElement);
+    scene.add(new THREE.AmbientLight(0xffffff,0.55));
+    const d1=new THREE.DirectionalLight(0xffffff,0.9);d1.position.set(2,3,4);scene.add(d1);
+    const d2=new THREE.DirectionalLight(0x8899ff,0.3);d2.position.set(-3,-2,-3);scene.add(d2);
+    window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+    (function loop(){requestAnimationFrame(loop);renderer.render(scene,camera);})();
+  }
+
+  function fitCam(geo){
+    geo.computeBoundingBox();
+    const box=geo.boundingBox;box.getCenter(center);
+    const s=new THREE.Vector3();box.getSize(s);
+    const maxD=Math.max(s.x,s.y,s.z);
+    const dist=(maxD/2)/Math.tan(camera.fov*Math.PI/360)*1.9;
+    camera.position.set(0,0,dist);camera.near=dist*0.001;camera.far=dist*200;camera.updateProjectionMatrix();
+    if(mainMesh)mainMesh.position.set(-center.x,-center.y,-center.z);
+    if(voxMesh)voxMesh.position.set(-center.x,-center.y,-center.z);
+  }
+
+  // ПАРСЕРЫ
+  function parseSTL(buf){
+    const view=new DataView(buf),n=view.getUint32(80,true);
+    if(buf.byteLength===84+n*50&&n>0)return stlBin(buf,view,n);
+    const txt=new TextDecoder().decode(buf);
+    return txt.toLowerCase().includes('facet')?stlAsc(txt):stlBin(buf,view,n);
+  }
+  function stlBin(buf,view,n){
+    const pos=new Float32Array(n*9);let off=84,pi=0;
+    for(let i=0;i<n;i++){off+=12;for(let v=0;v<3;v++){pos[pi++]=view.getFloat32(off,true);off+=4;pos[pi++]=view.getFloat32(off,true);off+=4;pos[pi++]=view.getFloat32(off,true);off+=4;}off+=2;}
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.computeVertexNormals();return g;
+  }
+  function stlAsc(txt){
+    const pos=[],re=/vertex\s+([\d.eE+\-]+)\s+([\d.eE+\-]+)\s+([\d.eE+\-]+)/g;let m;
+    while((m=re.exec(txt))!==null)pos.push(+m[1],+m[2],+m[3]);
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(pos),3));g.computeVertexNormals();return g;
+  }
+  function parseOBJ(txt){
+    const v=[],f=[];
+    txt.split('\n').forEach(l=>{l=l.trim();if(l.startsWith('v ')){const p=l.split(/\s+/);v.push(+p[1],+p[2],+p[3]);}else if(l.startsWith('f ')){const p=l.split(/\s+/).slice(1).map(s=>parseInt(s)-1);for(let i=1;i<p.length-1;i++)f.push(p[0],p[i],p[i+1]);}});
+    const pos=new Float32Array(f.length*3);f.forEach((vi,i)=>{pos[i*3]=v[vi*3];pos[i*3+1]=v[vi*3+1];pos[i*3+2]=v[vi*3+2];});
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.computeVertexNormals();return g;
+  }
+  async function parse3MF(buf){
+    const zip=await JSZip.loadAsync(buf);
+    const keys=Object.keys(zip.files);
+    const k=keys.find(k=>k.endsWith('.model'))||keys.find(k=>k.includes('3D/')&&!zip.files[k].dir);
+    if(!k)throw new Error('Не найден .model в 3MF');
+    const xml=await zip.files[k].async('string');
+    const doc=new DOMParser().parseFromString(xml,'text/xml');
+    const vArr=[],tArr=[];
+    doc.querySelectorAll('vertex').forEach(v=>vArr.push(+v.getAttribute('x'),+v.getAttribute('y'),+v.getAttribute('z')));
+    doc.querySelectorAll('triangle').forEach(t=>tArr.push(+t.getAttribute('v1'),+t.getAttribute('v2'),+t.getAttribute('v3')));
+    if(!vArr.length)throw new Error('Модель пустая');
+    const pos=new Float32Array(tArr.length*3);tArr.forEach((vi,i)=>{pos[i*3]=vArr[vi*3];pos[i*3+1]=vArr[vi*3+1];pos[i*3+2]=vArr[vi*3+2];});
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.computeVertexNormals();return g;
+  }
+  async function parseGLB(buf){
+    const view=new DataView(buf);
+    if(view.getUint32(0,true)!==0x46546C67)throw new Error('Не валидный GLB');
+    const jsonLen=view.getUint32(12,true);
+    const json=JSON.parse(new TextDecoder().decode(new Uint8Array(buf,20,jsonLen)));
+    const binOff=20+jsonLen+8;
+    return gltfGeo(json,buf.slice(binOff));
+  }
+  function gltfGeo(json,binBuf){
+    const allPos=[];
+    (json.meshes||[]).forEach(mesh=>{
+      (mesh.primitives||[]).forEach(prim=>{
+        const acc=json.accessors[prim.attributes.POSITION];
+        const bv=json.bufferViews[acc.bufferView];
+        const byteOff=(bv.byteOffset||0)+(acc.byteOffset||0);
+        const arr=new Float32Array(binBuf,byteOff,acc.count*3);
+        if(prim.indices!==undefined){
+          const ia=json.accessors[prim.indices],ibv=json.bufferViews[ia.bufferView];
+          const iOff=(ibv.byteOffset||0)+(ia.byteOffset||0);
+          const iArr=ia.componentType===5125?new Uint32Array(binBuf,iOff,ia.count):new Uint16Array(binBuf,iOff,ia.count);
+          for(let i=0;i<iArr.length;i+=3){allPos.push(arr[iArr[i]*3],arr[iArr[i]*3+1],arr[iArr[i]*3+2],arr[iArr[i+1]*3],arr[iArr[i+1]*3+1],arr[iArr[i+1]*3+2],arr[iArr[i+2]*3],arr[iArr[i+2]*3+1],arr[iArr[i+2]*3+2]);}
+        }else{for(let i=0;i<arr.length;i++)allPos.push(arr[i]);}
+      });
+    });
+    if(!allPos.length)throw new Error('GLB не содержит геометрию');
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(allPos),3));g.computeVertexNormals();return g;
+  }
+
+  // ── ВОКСЕЛИЗАЦИЯ (правильная: ray casting по Z для заполнения) ──────
+  const tick=()=>new Promise(r=>setTimeout(r,0));
+
+  async function voxelize(geo){
+    setLoad('Подготовка…');
+    document.getElementById('progWrap').style.display='block';
+    setProgress(0); await tick();
+
+    geo.computeBoundingBox();
+    const box=geo.boundingBox;
+    const sz=new THREE.Vector3();box.getSize(sz);
+
+    // Размер вокселя = 1/80 от наибольшей оси, но минимум 3 слоя по каждой оси
+    const GRID=+document.getElementById('voxSizeSlider').value;
+    const step=Math.max(sz.x,sz.y,sz.z)/GRID;
+    const nx=Math.max(3,Math.ceil(sz.x/step)+1);
+    const ny=Math.max(3,Math.ceil(sz.y/step)+1);
+    const nz=Math.max(3,Math.ceil(sz.z/step)+1);
+
+    const tmpMesh=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({side:THREE.DoubleSide}));
+    const rc=new THREE.Raycaster();
+    rc.params.Mesh={backfaceCulling:false};
+
+    const grid=new Uint8Array(nx*ny*nz);
+    const idx=(xi,yi,zi)=>xi+yi*nx+zi*nx*ny;
+
+    // Стреляем по оси Y (высота) — оптимально для большинства моделей
+    // Для каждой колонки (x,z) пускаем луч вниз→вверх по Y
+    const dirY=new THREE.Vector3(0,1,0);
+    for(let xi=0;xi<nx;xi++){
+      for(let zi=0;zi<nz;zi++){
+        const ox=box.min.x+(xi+0.5)*step;
+        const oz=box.min.z+(zi+0.5)*step;
+        const origin=new THREE.Vector3(ox,box.min.y-step,oz);
+        rc.set(origin,dirY);
+        const hits=rc.intersectObject(tmpMesh);
+        if(hits.length>0){
+          const yHits=hits.map(h=>h.point.y).sort((a,b)=>a-b);
+          // Поверхностные воксели
+          yHits.forEach(y=>{
+            const yi=Math.round((y-box.min.y)/step);
+            if(yi>=0&&yi<ny) grid[idx(xi,yi,zi)]=1;
+          });
+          // Заполнение внутри (нечётное правило)
+          for(let h=0;h<yHits.length-1;h+=2){
+            const y0=yHits[h],y1=yHits[h+1];
+            const yi0=Math.max(0,Math.floor((y0-box.min.y)/step));
+            const yi1=Math.min(ny-1,Math.ceil((y1-box.min.y)/step));
+            for(let yi=yi0;yi<=yi1;yi++) grid[idx(xi,yi,zi)]=1;
+          }
+        }
+      }
+      if(xi%2===0){
+        setProgress(Math.round(xi/nx*85));
+        await tick();
+      }
+    }
+
+    setLoad('Строю меш…');setProgress(90);await tick();
+
+    const count=grid.reduce((s,v)=>s+v,0);
+    if(!count){hideLoad();showToast('Не удалось вокселизировать');return;}
+    if(count>300000){hideLoad();showToast('Модель слишком сложная для вокселизации');return;}
+
+    const bGeo=new THREE.BoxGeometry(step,step,step);
+    voxMat=new THREE.MeshPhongMaterial({color:curColor,shininess:80,specular:new THREE.Color(0x111111),polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1});
+    const inst=new THREE.InstancedMesh(bGeo,voxMat,count);
+    const dummy=new THREE.Object3D();let di=0;
+
+    for(let xi=0;xi<nx;xi++)
+      for(let yi=0;yi<ny;yi++)
+        for(let zi=0;zi<nz;zi++)
+          if(grid[idx(xi,yi,zi)]){
+            dummy.position.set(
+              box.min.x+(xi+0.5)*step,
+              box.min.y+(yi+0.5)*step,
+              box.min.z+(zi+0.5)*step
+            );
+            dummy.updateMatrix();
+            inst.setMatrixAt(di++,dummy.matrix);
+          }
+    inst.instanceMatrix.needsUpdate=true;
+
+    if(voxMesh)scene.remove(voxMesh);
+    voxMesh=inst;
+    voxMesh.position.set(-center.x,-center.y,-center.z);
+    if(mainMesh)voxMesh.rotation.copy(mainMesh.rotation);
+    scene.add(voxMesh);
+    if(mainMesh)mainMesh.visible=false;
+    showVox=true;
+
+    setProgress(100);
+    document.getElementById('btnVox').textContent='◈ Оригинал';
+    document.getElementById('btnVox').classList.add('on');
+    document.getElementById('expVoxRow').style.display='block';
+    document.getElementById('progWrap').style.display='none';
+    hideLoad();
+    showToast(`✅ ${count} воксельей`);
+  }
+
+  function setProgress(p){
+    document.getElementById('progFill').style.width=p+'%';
+  }
+
+  // ЭКСПОРТ
+  window.doExport=function(src,fmt){
+    const geo=src==='vox'?getVoxGeo():mainGeo;
+    if(!geo){showToast('Нет модели');return;}
+    const base=(document.getElementById('hudName').textContent||'model').replace(/\.[^.]+$/,'');
+    const sfx=src==='vox'?'_vox':'';
+    let blob,name;
+    if(fmt==='stl'){blob=new Blob([toSTL(geo)],{type:'application/octet-stream'});name=base+sfx+'.stl';}
+    else if(fmt==='obj'){blob=new Blob([toOBJ(geo)],{type:'text/plain'});name=base+sfx+'.obj';}
+    else{blob=new Blob([toGLB(geo)],{type:'model/gltf-binary'});name=base+'.glb';}
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=name;a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    showToast('💾 '+name);
+  };
+
+  function getVoxGeo(){
+    if(!voxMesh)return null;
+    const bGeo=new THREE.BoxGeometry(1,1,1),pos=[];
+    for(let i=0;i<voxMesh.count;i++){
+      const m=new THREE.Matrix4();voxMesh.getMatrixAt(i,m);
+      const p=new THREE.Vector3(),s=new THREE.Vector3(),q=new THREE.Quaternion();m.decompose(p,q,s);
+      const bp=bGeo.attributes.position;
+      for(let j=0;j<bp.count;j++)pos.push(bp.getX(j)*s.x+p.x,bp.getY(j)*s.y+p.y,bp.getZ(j)*s.z+p.z);
+    }
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(pos),3));g.computeVertexNormals();return g;
+  }
+  function toSTL(geo){
+    const p=geo.attributes.position,n=p.count/3;
+    const buf=new ArrayBuffer(84+n*50);const view=new DataView(buf);view.setUint32(80,n,true);
+    let off=84;const v0=new THREE.Vector3(),v1=new THREE.Vector3(),v2=new THREE.Vector3(),nm=new THREE.Vector3();
+    for(let i=0;i<p.count;i+=3){
+      v0.set(p.getX(i),p.getY(i),p.getZ(i));v1.set(p.getX(i+1),p.getY(i+1),p.getZ(i+1));v2.set(p.getX(i+2),p.getY(i+2),p.getZ(i+2));
+      nm.crossVectors(v1.clone().sub(v0),v2.clone().sub(v0)).normalize();
+      view.setFloat32(off,nm.x,true);off+=4;view.setFloat32(off,nm.y,true);off+=4;view.setFloat32(off,nm.z,true);off+=4;
+      [v0,v1,v2].forEach(v=>{view.setFloat32(off,v.x,true);off+=4;view.setFloat32(off,v.y,true);off+=4;view.setFloat32(off,v.z,true);off+=4;});
+      off+=2;
+    }
+    return buf;
+  }
+  function toOBJ(geo){
+    const p=geo.attributes.position;let out='# Pechatniki 3D Viewer\n';
+    for(let i=0;i<p.count;i++)out+=`v ${p.getX(i).toFixed(4)} ${p.getY(i).toFixed(4)} ${p.getZ(i).toFixed(4)}\n`;
+    for(let i=0;i<p.count;i+=3)out+=`f ${i+1} ${i+2} ${i+3}\n`;
+    return out;
+  }
+  function toGLB(geo){
+    const p=geo.attributes.position;
+    const arr=new Float32Array(p.count*3);
+    for(let i=0;i<p.count;i++){arr[i*3]=p.getX(i);arr[i*3+1]=p.getY(i);arr[i*3+2]=p.getZ(i);}
+    let mnX=Infinity,mnY=Infinity,mnZ=Infinity,mxX=-Infinity,mxY=-Infinity,mxZ=-Infinity;
+    for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i),z=p.getZ(i);if(x<mnX)mnX=x;if(y<mnY)mnY=y;if(z<mnZ)mnZ=z;if(x>mxX)mxX=x;if(y>mxY)mxY=y;if(z>mxZ)mxZ=z;}
+    const bLen=arr.buffer.byteLength;
+    const json={asset:{version:'2.0'},scene:0,scenes:[{nodes:[0]}],nodes:[{mesh:0}],meshes:[{primitives:[{attributes:{POSITION:0},mode:4}]}],accessors:[{bufferView:0,componentType:5126,count:p.count,type:'VEC3',min:[mnX,mnY,mnZ],max:[mxX,mxY,mxZ]}],bufferViews:[{buffer:0,byteLength:bLen}],buffers:[{byteLength:bLen}]};
+    const jb=new TextEncoder().encode(JSON.stringify(json));
+    const jp=(4-jb.length%4)%4,bp=(4-bLen%4)%4;
+    const total=12+8+jb.length+jp+8+bLen+bp;
+    const out=new ArrayBuffer(total);const dv=new DataView(out);let off=0;
+    dv.setUint32(off,0x46546C67,true);off+=4;dv.setUint32(off,2,true);off+=4;dv.setUint32(off,total,true);off+=4;
+    dv.setUint32(off,jb.length+jp,true);off+=4;dv.setUint32(off,0x4E4F534A,true);off+=4;
+    new Uint8Array(out,off,jb.length).set(jb);off+=jb.length;for(let i=0;i<jp;i++){dv.setUint8(off,0x20);off++;}
+    dv.setUint32(off,bLen+bp,true);off+=4;dv.setUint32(off,0x004E4942,true);off+=4;
+    new Uint8Array(out,off,bLen).set(new Uint8Array(arr.buffer));off+=bLen;for(let i=0;i<bp;i++){dv.setUint8(off,0);off++;}
+    return out;
+  }
+
+  // ЗАГРУЗКА
+  async function loadFile(file){
+    setLoad('Читаю файл…');
+    try{
+      const ext=file.name.split('.').pop().toLowerCase();
+      const buf=await file.arrayBuffer();
+      let geo;
+      if(ext==='stl'){setLoad('Парсю STL…');geo=parseSTL(buf);}
+      else if(ext==='3mf'){setLoad('Читаю 3MF…');geo=await parse3MF(buf);}
+      else if(ext==='obj'){setLoad('Парсю OBJ…');geo=parseOBJ(new TextDecoder().decode(buf));}
+      else if(ext==='glb'){setLoad('Читаю GLB…');geo=await parseGLB(buf);}
+      else throw new Error('Формат '+ext+' не поддерживается');
+
+      if(mainMesh){scene.remove(mainMesh);mainMesh.geometry.dispose();mainMesh=null;}
+      if(voxMesh){scene.remove(voxMesh);voxMesh=null;}
+      showVox=false;wireMode=false;
+
+      mainGeo=geo;
+      mainMat=new THREE.MeshPhongMaterial({color:curColor,shininess:60,specular:new THREE.Color(0x333333)});
+      mainMesh=new THREE.Mesh(geo,mainMat);
+      scene.add(mainMesh);fitCam(geo);
+
+      geo.computeBoundingBox();
+      const s=new THREE.Vector3();geo.boundingBox.getSize(s);
+      document.getElementById('iW').textContent=s.x.toFixed(1);
+      document.getElementById('iD').textContent=s.y.toFixed(1);
+      document.getElementById('iH').textContent=s.z.toFixed(1);
+
+      const p=geo.attributes.position;let vol=0;
+      for(let i=0;i<p.count;i+=3){vol+=(p.getX(i)*(p.getY(i+1)*p.getZ(i+2)-p.getZ(i+1)*p.getY(i+2))+p.getX(i+1)*(p.getY(i+2)*p.getZ(i)-p.getZ(i+2)*p.getY(i))+p.getX(i+2)*(p.getY(i)*p.getZ(i+1)-p.getZ(i)*p.getY(i+1)))/6;}
+      vol=Math.abs(vol)/1000;
+      document.getElementById('iVol').textContent=vol.toFixed(1);
+      document.getElementById('iWt').textContent=(vol*1.24).toFixed(1);
+      document.getElementById('hudName').textContent=file.name;
+      document.getElementById('hudFmt').textContent=ext.toUpperCase()+' · '+vol.toFixed(1)+' см³';
+      document.getElementById('btnVox').textContent='◈ Воксели';
+      document.getElementById('btnVox').classList.remove('on');
+      document.getElementById('btnWire').textContent='⬡ Сетка';
+      document.getElementById('expPanel').classList.remove('open');
+      document.getElementById('expVoxRow').style.display='none';
+      document.getElementById('voxSliderRow').style.display='flex';
+
+      buildSwatches();
+      document.getElementById('screen-upload').style.display='none';
+      document.getElementById('hud').style.display='block';
+      const hint=document.getElementById('touchHint');
+      hint.style.opacity='1';setTimeout(()=>hint.style.opacity='0',3000);
+      hideLoad();
+    }catch(e){hideLoad();showToast('Ошибка: '+(e.message||'не удалось загрузить'));}
+  }
+
+  // УПРАВЛЕНИЕ
+  let drag=false,px=0,py=0,pd=0;
+  const cv=document.getElementById('canvas-wrap');
+  const ao=()=>showVox?voxMesh:mainMesh;
+  cv.addEventListener('touchstart',e=>{if(e.touches.length===1){drag=true;px=e.touches[0].clientX;py=e.touches[0].clientY;}else if(e.touches.length===2)pd=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);},{passive:false});
+  cv.addEventListener('touchmove',e=>{e.preventDefault();const obj=ao();if(!obj)return;if(e.touches.length===1&&drag){const dx=e.touches[0].clientX-px,dy=e.touches[0].clientY-py;px=e.touches[0].clientX;py=e.touches[0].clientY;obj.rotation.y+=dx*0.01;obj.rotation.x+=dy*0.01;}else if(e.touches.length===2){const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);camera.position.z-=(d-pd)*0.05;camera.position.z=Math.max(0.01,camera.position.z);pd=d;}},{passive:false});
+  cv.addEventListener('touchend',()=>drag=false);
+  cv.addEventListener('mousedown',e=>{drag=true;px=e.clientX;py=e.clientY;});
+  cv.addEventListener('mousemove',e=>{if(!drag)return;const obj=ao();if(!obj)return;obj.rotation.y+=(e.clientX-px)*0.01;obj.rotation.x+=(e.clientY-py)*0.01;px=e.clientX;py=e.clientY;});
+  cv.addEventListener('mouseup',()=>drag=false);
+  cv.addEventListener('wheel',e=>{camera.position.z+=e.deltaY*0.01;camera.position.z=Math.max(0.01,camera.position.z);},{passive:true});
+
+  // КНОПКИ
+  document.getElementById('btnClose').addEventListener('click',()=>{
+    if(mainMesh){scene.remove(mainMesh);mainMesh=null;}if(voxMesh){scene.remove(voxMesh);voxMesh=null;}
+    document.getElementById('hud').style.display='none';
+    document.getElementById('screen-upload').style.display='flex';
+    document.getElementById('fileInput').value='';
+    document.getElementById('voxSliderRow').style.display='none';
+  });
+  document.getElementById('btnReset').addEventListener('click',()=>{const obj=ao();if(obj)obj.rotation.set(0,0,0);if(mainGeo)fitCam(mainGeo);});
+  document.getElementById('btnWire').addEventListener('click',function(){wireMode=!wireMode;if(mainMat)mainMat.wireframe=wireMode;this.textContent=wireMode?'◼ Сплошная':'⬡ Сетка';});
+  document.getElementById('btnVox').addEventListener('click',async()=>{
+    if(voxMesh){
+      showVox=!showVox;
+      if(mainMesh)mainMesh.visible=!showVox;
+      voxMesh.visible=showVox;
+      const btn=document.getElementById('btnVox');
+      btn.textContent=showVox?'◈ Оригинал':'◈ Воксели';
+      btn.classList.toggle('on',showVox);
+    }else{
+      await voxelize(mainGeo);
+    }
+  });
+  // Обновление визуального трека слайдера
+  function updateSliderTrack(slider){
+    const pct=(slider.value-slider.min)/(slider.max-slider.min)*100;
+    slider.style.background='linear-gradient(90deg, var(--accent) '+pct+'%, rgba(124,111,255,0.15) '+pct+'%)';
+    slider.style.setProperty('--pct', pct+'%');
+  }
+  const slider=document.getElementById('voxSizeSlider');
+  updateSliderTrack(slider);
+
+  document.getElementById('voxSizeSlider').addEventListener('input',function(){
+    document.getElementById('voxSizeVal').textContent=this.value;
+    updateSliderTrack(this);
+    // Сбросить воксели если уже были посчитаны
+    if(voxMesh){
+      scene.remove(voxMesh);voxMesh=null;showVox=false;
+      if(mainMesh)mainMesh.visible=true;
+      document.getElementById('btnVox').textContent='◈ Воксели';
+      document.getElementById('btnVox').classList.remove('on');
+      document.getElementById('expVoxRow').style.display='none';
+    }
+  });
+  document.getElementById('btnExp').addEventListener('click',()=>{document.getElementById('expPanel').classList.toggle('open');});
+  document.getElementById('btnNew').addEventListener('click',()=>document.getElementById('fileInput').click());
+
+  const dz=document.getElementById('dropZone'),fi=document.getElementById('fileInput');
+  dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag-over');});
+  dz.addEventListener('dragleave',()=>dz.classList.remove('drag-over'));
+  dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag-over');if(e.dataTransfer?.files?.[0])loadFile(e.dataTransfer.files[0]);});
+  fi.addEventListener('change',()=>{if(fi.files?.[0])loadFile(fi.files[0]);});
+
+  function setLoad(msg){document.getElementById('loadMsg').textContent=msg||'…';document.getElementById('loading').classList.add('show');}
+  function hideLoad(){document.getElementById('loading').classList.remove('show');}
+  function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(showToast._t);showToast._t=setTimeout(()=>t.classList.remove('show'),3500);}
+
+  initThree();buildSwatches();
+
+  // ══════════════════════════════════════════
+  // SCANNER MODULE
+  // ══════════════════════════════════════════
+  let scanStream = null;
+  let depthModel = null;
+  let capturedImageData = null;
+  let scanGeo = null;
+  let previewRenderer = null;
+  let previewScene = null;
+  let previewCamera = null;
+  let previewMesh = null;
+
+  // Переключение вкладок
+  window.switchTab = function(tab) {
+    document.getElementById('tabFile').classList.toggle('active', tab==='file');
+    document.getElementById('tabScan').classList.toggle('active', tab==='scan');
+    document.getElementById('screen-upload').style.display = tab==='file' ? 'flex' : 'none';
+    const scanScreen = document.getElementById('screen-scanner');
+    scanScreen.classList.toggle('active', tab==='scan');
+    if(tab==='scan') initCamera();
+    else stopCamera();
+  };
+
+  // Показывать вкладки на главном экране
+  function showTabs(){ document.getElementById('bottomTabs').classList.add('visible'); }
+  function hideTabs(){ document.getElementById('bottomTabs').classList.remove('visible'); }
+  showTabs();
+
+  // Скрываем вкладки когда открыта модель
+  const origShowHud = loadFile;
+
+  // Камера
+  async function initCamera(){
+    try{
+      scanStream = await navigator.mediaDevices.getUserMedia({
+        video:{
+          facingMode:'environment',
+          width:{ideal:640, max:1280},
+          height:{ideal:480, max:720}
+        }
+      });
+      const video = document.getElementById('scanVideo');
+      video.srcObject = scanStream;
+      await video.play();
+      document.getElementById('scanHint').textContent = 'Наведи на объект';
+      document.getElementById('btnCapture').disabled = false;
+      const scanLine = document.getElementById('scanLine');
+      if(scanLine){ scanLine.classList.add('active'); }
+    }catch(e){
+      document.getElementById('scanHint').textContent = '❌ Нет доступа к камере';
+      showToast('Нет доступа к камере');
+    }
+  }
+
+  function stopCamera(){
+    if(scanStream){ scanStream.getTracks().forEach(t=>t.stop()); scanStream=null; }
+    const scanLine = document.getElementById('scanLine');
+    if(scanLine){ scanLine.classList.remove('active'); }
+  }
+
+  // Снимок
+  document.getElementById('btnCapture').addEventListener('click', ()=>{
+    const video = document.getElementById('scanVideo');
+    const canvas = document.getElementById('scanCanvas');
+    let vw = video.videoWidth || 640;
+    let vh = video.videoHeight || 480;
+    const maxCaptureW = 640;
+    if(vw > maxCaptureW){
+      const k = maxCaptureW / vw;
+      vw = maxCaptureW;
+      vh = Math.round(vh * k);
+    }
+    canvas.width = vw;
+    canvas.height = vh;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, vw, vh);
+    capturedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    // Показать снятый кадр
+    canvas.style.display = 'block';
+    video.style.display = 'none';
+    document.getElementById('scanHint').textContent = '✅ Снимок сделан';
+    document.getElementById('btnCapture').style.display = 'none';
+    document.getElementById('btnBuildDepth').style.display = 'block';
+    document.getElementById('btnRescan').style.display = 'block';
+    stopCamera();
+    const scanLine = document.getElementById('scanLine');
+    if(scanLine){ scanLine.classList.remove('active'); }
+  });
+
+  // Переснять
+  document.getElementById('btnRescan').addEventListener('click', ()=>{
+    document.getElementById('scanCanvas').style.display = 'none';
+    document.getElementById('scanVideo').style.display = 'block';
+    document.getElementById('depthCanvas').style.display = 'none';
+    document.getElementById('scan3dCanvas').style.display = 'none';
+    document.getElementById('btnCapture').style.display = 'block';
+    document.getElementById('btnBuildDepth').style.display = 'none';
+    document.getElementById('btnRescan').style.display = 'none';
+    document.getElementById('btnSendToVoxel').style.display = 'none';
+    document.getElementById('scanInfoRow').style.display = 'none';
+    document.getElementById('modelStatus').textContent = '';
+    capturedImageData = null; scanGeo = null;
+    initCamera();
+  });
+
+  // Построить depth map → 3D меш
+  document.getElementById('btnBuildDepth').addEventListener('click', async ()=>{
+    document.getElementById('btnBuildDepth').disabled = true;
+    document.getElementById('modelStatus').textContent = '⏳ Загружаю нейросеть…';
+    setLoad('Загружаю модель глубины…');
+    try{
+      if(!depthModel){
+        // Используем простую кастомную depth estimation без тяжёлого MiDaS
+        // Строим псевдо-глубину через яркость + edge detection
+        depthModel = 'simple';
+      }
+      hideLoad();
+      document.getElementById('modelStatus').textContent = '🧠 Строю карту глубины…';
+      await tick();
+      await buildDepthAndMesh();
+    }catch(e){
+      hideLoad();
+      document.getElementById('btnBuildDepth').disabled = false;
+      showToast('Ошибка: ' + e.message);
+      document.getElementById('modelStatus').textContent = '';
+    }
+  });
+
+  async function buildDepthAndMesh(){
+    const canvas = document.getElementById('scanCanvas');
+    const W = canvas.width, H = canvas.height;
+    const ctx = canvas.getContext('2d');
+    const imgData = ctx.getImageData(0, 0, W, H);
+    const pixels = imgData.data;
+
+    // Шаг 1: строим карту глубины на плотной, но ограниченной сетке для мобильных
+    const MAX_W = 160;
+    const MIN_W = 48;
+    let dW = Math.min(MAX_W, Math.max(MIN_W, Math.floor(W * 0.3)));
+    let dH = Math.round(dW * H / W);
+    if(dH > MAX_W){
+      dH = MAX_W;
+      dW = Math.round(dH * W / H);
+    }
+
+    const gray = new Float32Array(dW * dH);
+    const edges = new Float32Array(dW * dH);
+    const depth = new Float32Array(dW * dH);
+
+    // Downsample grayscale с учётом аспектного соотношения
+    for(let y=0; y<dH; y++){
+      const sy = Math.floor((y + 0.5) * H / dH);
+      for(let x=0; x<dW; x++){
+        const sx = Math.floor((x + 0.5) * W / dW);
+        const i = (sy*W + sx)*4;
+        gray[y*dW+x] = (pixels[i]*0.299 + pixels[i+1]*0.587 + pixels[i+2]*0.114) / 255;
+      }
+    }
+
+    // Sobel edge detection: сильные градиенты = границы объекта
+    for(let y=1; y<dH-1; y++){
+      for(let x=1; x<dW-1; x++){
+        const gxm1ym1 = gray[(y-1)*dW+(x-1)], gxp1ym1 = gray[(y-1)*dW+(x+1)];
+        const gxm1y   = gray[y*dW+(x-1)],     gxp1y   = gray[y*dW+(x+1)];
+        const gxm1yp1 = gray[(y+1)*dW+(x-1)], gxp1yp1 = gray[(y+1)*dW+(x+1)];
+        const gy0m1   = gray[(y-1)*dW+x],     gy0p1   = gray[(y+1)*dW+x];
+
+        const gx = -gxm1ym1 + gxp1ym1 - 2*gxm1y + 2*gxp1y - gxm1yp1 + gxp1yp1;
+        const gy =  gxm1ym1 + 2*gy0m1 + gxp1ym1 - gxm1yp1 - 2*gy0p1 - gxp1yp1;
+        const mag = Math.min(1, Math.sqrt(gx*gx + gy*gy) * 3);
+        edges[y*dW+x] = mag;
+      }
+    }
+
+    // Базовая глубина: инвертированная яркость + центровой bias
+    const cx0 = (dW-1)/2, cy0 = (dH-1)/2;
+    const maxR = Math.sqrt(cx0*cx0 + cy0*cy0) || 1;
+    for(let y=0; y<dH; y++){
+      for(let x=0; x<dW; x++){
+        const i = y*dW+x;
+        const base = 1 - gray[i]; // тёмное ближе, светлое дальше
+        const dx = x - cx0, dy = y - cy0;
+        const r = Math.sqrt(dx*dx + dy*dy) / maxR;
+        const centerBias = Math.max(0, 1 - r*r);
+        depth[i] = base*0.7 + centerBias*0.3;
+      }
+    }
+
+    // Многопроходное edge‑aware сглаживание (геометрически более гладкая поверхность)
+    const tmp = new Float32Array(dW * dH);
+    const ITER = 6;
+    const smoothK = 4.0;
+    for(let it=0; it<ITER; it++){
+      for(let y=0; y<dH; y++){
+        for(let x=0; x<dW; x++){
+          const i = y*dW+x;
+          let sum = depth[i];
+          let wSum = 1;
+          const neigh = [
+            [x-1,y],[x+1,y],
+            [x,y-1],[x,y+1]
+          ];
+          for(let n=0;n<neigh.length;n++){
+            const nx = neigh[n][0], ny = neigh[n][1];
+            if(nx<0||nx>=dW||ny<0||ny>=dH) continue;
+            const j = ny*dW+nx;
+            const e = Math.max(edges[i], edges[j]);
+            const w = Math.exp(-smoothK*e);
+            sum += depth[j]*w;
+            wSum += w;
+          }
+          tmp[i] = sum / wSum;
+        }
+      }
+      for(let k=0;k<depth.length;k++) depth[k] = tmp[k];
+    }
+
+    // Нормализуем
+    let mn=Infinity, mx=-Infinity;
+    for(let i=0;i<depth.length;i++){ const v=depth[i]; if(v<mn)mn=v; if(v>mx)mx=v; }
+    const rng = mx-mn || 1;
+    for(let i=0;i<depth.length;i++) depth[i]=(depth[i]-mn)/rng;
+
+    document.getElementById('modelStatus').textContent = '🎨 Визуализирую глубину…';
+    await tick();
+
+    // Рисуем depth map
+    const dc = document.getElementById('depthCanvas');
+    dc.width=dW; dc.height=dH; dc.style.display='block';
+    const dctx = dc.getContext('2d');
+    const dImg = dctx.createImageData(dW,dH);
+    for(let i=0;i<depth.length;i++){
+      const v = Math.floor(depth[i]*255);
+      // Раскрашиваем как тепловую карту: синий→зелёный→красный
+      let r2,g2,b2;
+      if(depth[i]<0.5){ r2=0; g2=Math.floor(depth[i]*2*255); b2=Math.floor((1-depth[i]*2)*255); }
+      else{ r2=Math.floor((depth[i]-0.5)*2*255); g2=Math.floor((1-(depth[i]-0.5)*2)*255); b2=0; }
+      dImg.data[i*4]=r2; dImg.data[i*4+1]=g2; dImg.data[i*4+2]=b2; dImg.data[i*4+3]=255;
+    }
+    dctx.putImageData(dImg,0,0);
+
+    document.getElementById('modelStatus').textContent = '🔲 Строю 3D меш…';
+    await tick();
+
+    // Строим 3D геометрию из depth map
+    // Каждый пиксель = вершина, высота = depth value
+    const MESH_SCALE = 100; // мм — размер модели
+    const depthScale = 35;  // мм — максимальная высота
+
+    const positions = [];
+    const indices = [];
+
+    for(let y=0; y<dH; y++){
+      for(let x=0; x<dW; x++){
+        const d = depth[y*dW+x];
+        const px = (x/dW - 0.5) * MESH_SCALE;
+        const pz = (y/dH - 0.5) * MESH_SCALE;
+        const py = d * depthScale;
+        positions.push(px, py, pz);
+      }
+    }
+
+    // Треугольники
+    for(let y=0; y<dH-1; y++){
+      for(let x=0; x<dW-1; x++){
+        const i = y*dW+x;
+        indices.push(i, i+1, i+dW);
+        indices.push(i+1, i+dW+1, i+dW);
+      }
+    }
+
+    scanGeo = new THREE.BufferGeometry();
+    scanGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions),3));
+    scanGeo.setIndex(indices);
+    scanGeo.computeVertexNormals();
+
+    // Показываем превью в mini-canvas
+    renderScanPreview(scanGeo, dW, dH);
+
+    // Инфо
+    const ptCount = positions.length/3;
+    document.getElementById('sW').textContent = MESH_SCALE+'мм';
+    document.getElementById('sH').textContent = depthScale+'мм';
+    document.getElementById('sPts').textContent = (ptCount/1000).toFixed(1)+'k';
+    document.getElementById('scanInfoRow').style.display = 'flex';
+    document.getElementById('btnSendToVoxel').style.display = 'block';
+    document.getElementById('btnBuildDepth').style.display = 'none';
+    document.getElementById('modelStatus').textContent = '✅ Готово! Открой в VoxelDrop для вокселизации';
+  }
+
+  function renderScanPreview(geo, w, h){
+    // Рендерим в мини Three.js сцену, переиспользуя WebGL‑контекст для стабильности на мобилках
+    const c = document.getElementById('scan3dCanvas');
+    const ratio = h>0 ? w/h : 1;
+    const cssMax = 320;
+    const cssW = cssMax;
+    const cssH = Math.round(cssW / (ratio || 1));
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+    c.width = Math.round(cssW * pixelRatio);
+    c.height = Math.round(cssH * pixelRatio);
+    c.style.display = 'block';
+
+    if(!previewRenderer){
+      previewRenderer = new THREE.WebGLRenderer({canvas:c, antialias:true, alpha:true, powerPreference:'high-performance'});
+      previewRenderer.setPixelRatio(pixelRatio);
+      previewScene = new THREE.Scene();
+      previewCamera = new THREE.PerspectiveCamera(50, c.width/c.height, 0.1, 1000);
+      previewScene.add(new THREE.AmbientLight(0xffffff, 0.6));
+      const dl = new THREE.DirectionalLight(0xffffff,0.8); dl.position.set(1,2,3); previewScene.add(dl);
+    }else{
+      previewRenderer.setSize(c.width, c.height, false);
+      previewRenderer.setPixelRatio(pixelRatio);
+      previewCamera.aspect = c.width/c.height;
+      previewCamera.updateProjectionMatrix();
+      if(previewMesh){
+        previewScene.remove(previewMesh);
+        previewMesh.geometry.dispose();
+        previewMesh.material.dispose();
+        previewMesh = null;
+      }
+    }
+
+    const mat = new THREE.MeshPhongMaterial({color:0x7c6fff, shininess:40, side:THREE.DoubleSide});
+    previewMesh = new THREE.Mesh(geo, mat);
+    previewScene.add(previewMesh);
+    geo.computeBoundingBox();
+    const box = geo.boundingBox;
+    const center = new THREE.Vector3(); box.getCenter(center);
+    const size = new THREE.Vector3(); box.getSize(size);
+    const maxD = Math.max(size.x,size.y,size.z);
+    previewCamera.position.set(0, maxD*0.8, maxD*1.2);
+    previewCamera.lookAt(center);
+    previewMesh.position.set(-center.x,-center.y,-center.z);
+    previewRenderer.setClearColor(0x080c14, 1);
+    previewRenderer.setSize(c.width, c.height, false);
+    previewRenderer.render(previewScene, previewCamera);
+  }
+
+  // Отправить в VoxelDrop
+  document.getElementById('btnSendToVoxel').addEventListener('click', ()=>{
+    if(!scanGeo){ showToast('Нет модели'); return; }
+    // Загружаем геометрию сканера как основную
+    if(mainMesh){ scene.remove(mainMesh); mainMesh.geometry.dispose(); mainMesh=null; }
+    if(voxMesh){ scene.remove(voxMesh); voxMesh=null; }
+    showVox=false; wireMode=false;
+    mainGeo = scanGeo;
+    mainMat = new THREE.MeshPhongMaterial({color:curColor, shininess:60});
+    mainMesh = new THREE.Mesh(mainGeo, mainMat);
+    scene.add(mainMesh); fitCam(mainGeo);
+    mainGeo.computeBoundingBox();
+    const s = new THREE.Vector3(); mainGeo.boundingBox.getSize(s);
+    document.getElementById('iW').textContent = s.x.toFixed(1);
+    document.getElementById('iD').textContent = s.y.toFixed(1);
+    document.getElementById('iH').textContent = s.z.toFixed(1);
+    document.getElementById('iVol').textContent = '—';
+    document.getElementById('iWt').textContent = '—';
+    document.getElementById('hudName').textContent = 'scan_' + Date.now() + '.obj';
+    document.getElementById('hudFmt').textContent = 'SCAN · depth mesh';
+    document.getElementById('btnVox').textContent = '◈ Воксели';
+    document.getElementById('btnVox').classList.remove('on');
+    document.getElementById('expPanel').classList.remove('open');
+    document.getElementById('expVoxRow').style.display = 'none';
+    document.getElementById('voxSliderRow').style.display = 'flex';
+    buildSwatches();
+    // Переходим в HUD
+    switchTab('file');
+    document.getElementById('screen-upload').style.display = 'none';
+    document.getElementById('hud').style.display = 'block';
+    hideTabs();
+    showToast('📦 Скан загружен в VoxelDrop!');
+    stopCamera();
+  });
+
+  // Прячем вкладки когда открыт HUD
+  document.getElementById('btnClose').addEventListener('click', ()=>{
+    showTabs();
+  }, true); // capture=true чтобы сработало до основного обработчика
+
+  // Кнопка SCAN в HUD — доступ к сканеру из основного интерфейса
+  document.getElementById('btnScanHud').addEventListener('click', ()=>{
+    document.getElementById('hud').style.display = 'none';
+    document.getElementById('screen-upload').style.display = 'none';
+    document.getElementById('screen-scanner').classList.add('active');
+    initCamera();
+  });
+
+})();
+</script>
+</body>
+</html>
