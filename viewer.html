@@ -698,7 +698,13 @@
     else if(fmt==='obj'){blob=new Blob([toOBJ(geo)],{type:'text/plain'});name=base+sfx+'.obj';}
     else{blob=new Blob([toGLB(geo)],{type:'model/gltf-binary'});name=base+'.glb';}
     const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');a.href=url;a.download=name;a.click();
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=name;
+    // Для мобильных и webview (в т.ч. Telegram) надёжнее кликать по добавленной в DOM ссылке
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
     setTimeout(()=>URL.revokeObjectURL(url),1000);
     showToast('💾 '+name);
   };
