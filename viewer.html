@@ -434,26 +434,6 @@
     .scan-corner.bl { bottom: 10px; left: 10px; border-bottom-width: 2px; border-left-width: 2px; border-radius: 0 0 0 4px; }
     .scan-corner.br { bottom: 10px; right: 10px; border-bottom-width: 2px; border-right-width: 2px; border-radius: 0 0 4px 0; }
 
-    .scan-line {
-      position: absolute;
-      left: 6%; right: 6%;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, var(--accent), transparent);
-      box-shadow: 0 0 12px var(--accent-glow);
-      opacity: 0;
-      transform: translateY(-10%);
-      pointer-events: none;
-      will-change: transform, opacity;
-    }
-    .scan-line.active {
-      opacity: 1;
-      animation: scan-line-move 1.4s linear infinite;
-    }
-    @keyframes scan-line-move {
-      0% { transform: translateY(-10%); }
-      100% { transform: translateY(110%); }
-    }
-
     .scan-actions { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 400px; margin-top: 10px; }
     .scan-btn {
       width: 100%; padding: 13px; border-radius: 16px; border: none; cursor: pointer;
@@ -584,7 +564,6 @@
     </div>
 
     <div class="btn-row">
-      <button class="btn" id="btnScanHud">📷 SCAN</button>
       <button class="btn" id="btnReset">🔄 Сброс</button>
       <button class="btn" id="btnWire">⬡ Сетка</button>
       <button class="btn btn-vox" id="btnVox">◈ Воксели</button>
@@ -629,7 +608,6 @@
     <div class="scan-corner bl"></div>
     <div class="scan-corner br"></div>
     <div class="scan-overlay-hint" id="scanHint">Наведи на объект</div>
-    <div class="scan-line" id="scanLine"></div>
   </div>
 
   <canvas id="depthCanvas"></canvas>
@@ -1062,10 +1040,6 @@
   let depthModel = null;
   let capturedImageData = null;
   let scanGeo = null;
-  let previewRenderer = null;
-  let previewScene = null;
-  let previewCamera = null;
-  let previewMesh = null;
 
   // Переключение вкладок
   window.switchTab = function(tab) {
@@ -1090,19 +1064,13 @@
   async function initCamera(){
     try{
       scanStream = await navigator.mediaDevices.getUserMedia({
-        video:{
-          facingMode:'environment',
-          width:{ideal:640, max:1280},
-          height:{ideal:480, max:720}
-        }
+        video:{ facingMode:'environment', width:{ideal:640}, height:{ideal:480} }
       });
       const video = document.getElementById('scanVideo');
       video.srcObject = scanStream;
       await video.play();
       document.getElementById('scanHint').textContent = 'Наведи на объект';
       document.getElementById('btnCapture').disabled = false;
-      const scanLine = document.getElementById('scanLine');
-      if(scanLine){ scanLine.classList.add('active'); }
     }catch(e){
       document.getElementById('scanHint').textContent = '❌ Нет доступа к камере';
       showToast('Нет доступа к камере');
@@ -1111,26 +1079,16 @@
 
   function stopCamera(){
     if(scanStream){ scanStream.getTracks().forEach(t=>t.stop()); scanStream=null; }
-    const scanLine = document.getElementById('scanLine');
-    if(scanLine){ scanLine.classList.remove('active'); }
   }
 
   // Снимок
   document.getElementById('btnCapture').addEventListener('click', ()=>{
     const video = document.getElementById('scanVideo');
     const canvas = document.getElementById('scanCanvas');
-    let vw = video.videoWidth || 640;
-    let vh = video.videoHeight || 480;
-    const maxCaptureW = 640;
-    if(vw > maxCaptureW){
-      const k = maxCaptureW / vw;
-      vw = maxCaptureW;
-      vh = Math.round(vh * k);
-    }
-    canvas.width = vw;
-    canvas.height = vh;
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, vw, vh);
+    ctx.drawImage(video, 0, 0);
     capturedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     // Показать снятый кадр
     canvas.style.display = 'block';
@@ -1140,8 +1098,6 @@
     document.getElementById('btnBuildDepth').style.display = 'block';
     document.getElementById('btnRescan').style.display = 'block';
     stopCamera();
-    const scanLine = document.getElementById('scanLine');
-    if(scanLine){ scanLine.classList.remove('active'); }
   });
 
   // Переснять
@@ -1190,91 +1146,62 @@
     const imgData = ctx.getImageData(0, 0, W, H);
     const pixels = imgData.data;
 
-    // Шаг 1: строим карту глубины на плотной, но ограниченной сетке для мобильных
-    const MAX_W = 160;
-    const MIN_W = 48;
-    let dW = Math.min(MAX_W, Math.max(MIN_W, Math.floor(W * 0.3)));
-    let dH = Math.round(dW * H / W);
-    if(dH > MAX_W){
-      dH = MAX_W;
-      dW = Math.round(dH * W / H);
-    }
+    // Шаг 1: Строим карту глубины
+    // Метод: комбинируем яркость + blur + edge detection
+    // Объекты на переднем плане обычно контрастнее и резче
+    const SCALE = 0.25; // уменьшаем для скорости
+    const dW = Math.floor(W * SCALE);
+    const dH = Math.floor(H * SCALE);
 
+    // Создаём downsampled grayscale
     const gray = new Float32Array(dW * dH);
-    const edges = new Float32Array(dW * dH);
-    const depth = new Float32Array(dW * dH);
-
-    // Downsample grayscale с учётом аспектного соотношения
     for(let y=0; y<dH; y++){
-      const sy = Math.floor((y + 0.5) * H / dH);
       for(let x=0; x<dW; x++){
-        const sx = Math.floor((x + 0.5) * W / dW);
+        const sx = Math.floor(x/SCALE), sy = Math.floor(y/SCALE);
         const i = (sy*W + sx)*4;
         gray[y*dW+x] = (pixels[i]*0.299 + pixels[i+1]*0.587 + pixels[i+2]*0.114) / 255;
       }
     }
 
-    // Sobel edge detection: сильные градиенты = границы объекта
+    // Sobel edge detection — края = ближе к нам
+    const edges = new Float32Array(dW * dH);
     for(let y=1; y<dH-1; y++){
       for(let x=1; x<dW-1; x++){
-        const gxm1ym1 = gray[(y-1)*dW+(x-1)], gxp1ym1 = gray[(y-1)*dW+(x+1)];
-        const gxm1y   = gray[y*dW+(x-1)],     gxp1y   = gray[y*dW+(x+1)];
-        const gxm1yp1 = gray[(y+1)*dW+(x-1)], gxp1yp1 = gray[(y+1)*dW+(x+1)];
-        const gy0m1   = gray[(y-1)*dW+x],     gy0p1   = gray[(y+1)*dW+x];
-
-        const gx = -gxm1ym1 + gxp1ym1 - 2*gxm1y + 2*gxp1y - gxm1yp1 + gxp1yp1;
-        const gy =  gxm1ym1 + 2*gy0m1 + gxp1ym1 - gxm1yp1 - 2*gy0p1 - gxp1yp1;
-        const mag = Math.min(1, Math.sqrt(gx*gx + gy*gy) * 3);
-        edges[y*dW+x] = mag;
+        const gx = -gray[(y-1)*dW+(x-1)] + gray[(y-1)*dW+(x+1)]
+                   -2*gray[y*dW+(x-1)] + 2*gray[y*dW+(x+1)]
+                   -gray[(y+1)*dW+(x-1)] + gray[(y+1)*dW+(x+1)];
+        const gy = gray[(y-1)*dW+(x-1)] + 2*gray[(y-1)*dW+x] + gray[(y-1)*dW+(x+1)]
+                   -gray[(y+1)*dW+(x-1)] - 2*gray[(y+1)*dW+x] - gray[(y+1)*dW+(x+1)];
+        edges[y*dW+x] = Math.min(1, Math.sqrt(gx*gx + gy*gy) * 3);
       }
     }
 
-    // Базовая глубина: инвертированная яркость + центровой bias
-    const cx0 = (dW-1)/2, cy0 = (dH-1)/2;
-    const maxR = Math.sqrt(cx0*cx0 + cy0*cy0) || 1;
+    // Gaussian blur на edges для сглаживания
+    const depth = new Float32Array(dW * dH);
+    const sigma = 3, r = Math.ceil(sigma*2);
+    // Простой box blur вместо gaussian для скорости
     for(let y=0; y<dH; y++){
       for(let x=0; x<dW; x++){
-        const i = y*dW+x;
-        const base = 1 - gray[i]; // тёмное ближе, светлое дальше
-        const dx = x - cx0, dy = y - cy0;
-        const r = Math.sqrt(dx*dx + dy*dy) / maxR;
-        const centerBias = Math.max(0, 1 - r*r);
-        depth[i] = base*0.7 + centerBias*0.3;
-      }
-    }
-
-    // Многопроходное edge‑aware сглаживание (геометрически более гладкая поверхность)
-    const tmp = new Float32Array(dW * dH);
-    const ITER = 6;
-    const smoothK = 4.0;
-    for(let it=0; it<ITER; it++){
-      for(let y=0; y<dH; y++){
-        for(let x=0; x<dW; x++){
-          const i = y*dW+x;
-          let sum = depth[i];
-          let wSum = 1;
-          const neigh = [
-            [x-1,y],[x+1,y],
-            [x,y-1],[x,y+1]
-          ];
-          for(let n=0;n<neigh.length;n++){
-            const nx = neigh[n][0], ny = neigh[n][1];
-            if(nx<0||nx>=dW||ny<0||ny>=dH) continue;
-            const j = ny*dW+nx;
-            const e = Math.max(edges[i], edges[j]);
-            const w = Math.exp(-smoothK*e);
-            sum += depth[j]*w;
-            wSum += w;
+        let sum=0, cnt=0;
+        for(let dy=-r; dy<=r; dy++){
+          for(let dx=-r; dx<=r; dx++){
+            const ny=y+dy, nx=x+dx;
+            if(ny>=0&&ny<dH&&nx>=0&&nx<dW){ sum+=edges[ny*dW+nx]; cnt++; }
           }
-          tmp[i] = sum / wSum;
         }
+        // Комбинируем: яркость центра + размытые края
+        const centerGray = gray[y*dW+x];
+        const blurEdge = sum/cnt;
+        // Предполагаем что объект в центре — добавляем центровое смещение
+        const cx = (x/dW - 0.5)*2, cy = (y/dH - 0.5)*2;
+        const centerBias = Math.max(0, 1 - Math.sqrt(cx*cx+cy*cy));
+        depth[y*dW+x] = blurEdge * 0.5 + centerBias * 0.3 + centerGray * 0.2;
       }
-      for(let k=0;k<depth.length;k++) depth[k] = tmp[k];
     }
 
     // Нормализуем
     let mn=Infinity, mx=-Infinity;
-    for(let i=0;i<depth.length;i++){ const v=depth[i]; if(v<mn)mn=v; if(v>mx)mx=v; }
+    depth.forEach(v=>{ if(v<mn)mn=v; if(v>mx)mx=v; });
     const rng = mx-mn || 1;
     for(let i=0;i<depth.length;i++) depth[i]=(depth[i]-mn)/rng;
 
@@ -1302,7 +1229,7 @@
     // Строим 3D геометрию из depth map
     // Каждый пиксель = вершина, высота = depth value
     const MESH_SCALE = 100; // мм — размер модели
-    const depthScale = 35;  // мм — максимальная высота
+    const depthScale = 30;  // мм — максимальная высота
 
     const positions = [];
     const indices = [];
@@ -1346,51 +1273,29 @@
   }
 
   function renderScanPreview(geo, w, h){
-    // Рендерим в мини Three.js сцену, переиспользуя WebGL‑контекст для стабильности на мобилках
+    // Рендерим в мини Three.js сцену
     const c = document.getElementById('scan3dCanvas');
-    const ratio = h>0 ? w/h : 1;
-    const cssMax = 320;
-    const cssW = cssMax;
-    const cssH = Math.round(cssW / (ratio || 1));
-    const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
-    c.width = Math.round(cssW * pixelRatio);
-    c.height = Math.round(cssH * pixelRatio);
+    c.width = w*4; c.height = h*4;
     c.style.display = 'block';
-
-    if(!previewRenderer){
-      previewRenderer = new THREE.WebGLRenderer({canvas:c, antialias:true, alpha:true, powerPreference:'high-performance'});
-      previewRenderer.setPixelRatio(pixelRatio);
-      previewScene = new THREE.Scene();
-      previewCamera = new THREE.PerspectiveCamera(50, c.width/c.height, 0.1, 1000);
-      previewScene.add(new THREE.AmbientLight(0xffffff, 0.6));
-      const dl = new THREE.DirectionalLight(0xffffff,0.8); dl.position.set(1,2,3); previewScene.add(dl);
-    }else{
-      previewRenderer.setSize(c.width, c.height, false);
-      previewRenderer.setPixelRatio(pixelRatio);
-      previewCamera.aspect = c.width/c.height;
-      previewCamera.updateProjectionMatrix();
-      if(previewMesh){
-        previewScene.remove(previewMesh);
-        previewMesh.geometry.dispose();
-        previewMesh.material.dispose();
-        previewMesh = null;
-      }
-    }
-
+    const preScene = new THREE.Scene();
+    const preCamera = new THREE.PerspectiveCamera(50, c.width/c.height, 0.1, 1000);
+    const preRenderer = new THREE.WebGLRenderer({canvas:c, antialias:true, alpha:true});
+    preRenderer.setSize(c.width, c.height);
+    preRenderer.setClearColor(0x080c14, 1);
+    preScene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dl = new THREE.DirectionalLight(0xffffff,0.8); dl.position.set(1,2,3); preScene.add(dl);
     const mat = new THREE.MeshPhongMaterial({color:0x7c6fff, shininess:40, side:THREE.DoubleSide});
-    previewMesh = new THREE.Mesh(geo, mat);
-    previewScene.add(previewMesh);
+    const mesh = new THREE.Mesh(geo, mat);
+    preScene.add(mesh);
     geo.computeBoundingBox();
     const box = geo.boundingBox;
     const center = new THREE.Vector3(); box.getCenter(center);
     const size = new THREE.Vector3(); box.getSize(size);
     const maxD = Math.max(size.x,size.y,size.z);
-    previewCamera.position.set(0, maxD*0.8, maxD*1.2);
-    previewCamera.lookAt(center);
-    previewMesh.position.set(-center.x,-center.y,-center.z);
-    previewRenderer.setClearColor(0x080c14, 1);
-    previewRenderer.setSize(c.width, c.height, false);
-    previewRenderer.render(previewScene, previewCamera);
+    preCamera.position.set(0, maxD*0.8, maxD*1.2);
+    preCamera.lookAt(center);
+    mesh.position.set(-center.x,-center.y,-center.z);
+    preRenderer.render(preScene, preCamera);
   }
 
   // Отправить в VoxelDrop
@@ -1432,14 +1337,6 @@
   document.getElementById('btnClose').addEventListener('click', ()=>{
     showTabs();
   }, true); // capture=true чтобы сработало до основного обработчика
-
-  // Кнопка SCAN в HUD — доступ к сканеру из основного интерфейса
-  document.getElementById('btnScanHud').addEventListener('click', ()=>{
-    document.getElementById('hud').style.display = 'none';
-    document.getElementById('screen-upload').style.display = 'none';
-    document.getElementById('screen-scanner').classList.add('active');
-    initCamera();
-  });
 
 })();
 </script>
