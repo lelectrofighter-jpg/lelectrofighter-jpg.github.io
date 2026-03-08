@@ -173,6 +173,51 @@
     .confirm-box h4 { font-size: 15px; font-weight: 700; color: #e2e8f0; margin-bottom: 6px; }
     .confirm-box p { font-size: 12px; color: #64748b; margin-bottom: 18px; line-height: 1.5; }
     .confirm-btns { display: flex; gap: 8px; }
+
+    /* ── РЕЖИМ ПРОЕКТ ── */
+    @keyframes projectPulse {
+      0%,100% { opacity:0.7; } 50% { opacity:1; }
+    }
+    body.project-mode {
+    }
+    body.project-mode::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      box-shadow:
+        inset 0 0 120px rgba(99,102,241,0.35),
+        inset 0 0 40px rgba(139,92,246,0.25),
+        inset 0 0 0 4px rgba(99,102,241,0.8);
+      animation: projectPulse 2.5s ease-in-out infinite;
+    }
+    .project-mode-badge {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+      background: linear-gradient(90deg, #4338ca, #7c3aed, #4338ca);
+      background-size: 200% 100%;
+      animation: projectPulse 2s ease-in-out infinite;
+      text-align: center; font-size: 13px; font-weight: 800; color: white;
+      padding: 7px 16px; letter-spacing: 0.1em; text-shadow: 0 0 10px rgba(255,255,255,0.5);
+      display: none;
+    }
+    body.project-mode .project-mode-badge { display: block; }
+    body.project-mode #projectModeBtn {
+      background: rgba(99,102,241,0.3) !important;
+      border-color: rgba(99,102,241,0.8) !important;
+      color: #c7d2fe !important;
+      box-shadow: 0 0 25px rgba(99,102,241,0.6), 0 0 50px rgba(99,102,241,0.2) !important;
+    }
+
+    .project-part-card {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.04);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .project-part-card:active { opacity: 0.8; }
+    .project-part-printer { font-size: 12px; font-weight: 700; color: #c7d2fe; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .project-part-detail { font-size: 11px; color: #64748b; flex-shrink: 0; }
+    .project-part-cost { font-size: 14px; font-weight: 700; color: #e0e7ff; flex-shrink: 0; margin-left: 6px; }
+    .project-total-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0 0; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 4px; }
     .toggle-switch {
       flex-shrink:0; width:48px; height:28px; border-radius:14px;
       background:rgba(148,163,184,0.35); border:1px solid rgba(255,255,255,0.1);
@@ -265,6 +310,15 @@
     <button type="button" id="tab-price" class="tab-btn">Цена</button>
     <button type="button" id="tab-file"  class="tab-btn">Файл</button>
   </div>
+  <div style="display:flex;gap:8px;margin-top:8px;margin-bottom:8px">
+    <button type="button" id="projectModeBtn" class="glass-btn py-2.5 px-4 font-semibold text-slate-300" style="flex:1;font-size:13px">
+      🔧 Режим Проект
+    </button>
+    <button type="button" id="myProjectsBtn" class="glass-btn py-2.5 px-4 font-semibold text-slate-300" style="flex:0 0 auto;font-size:13px">
+      📂 Проекты
+    </button>
+  </div>
+
 
   <!-- ══ ВКЛАДКА: Себестоимость ══ -->
   <div id="panel-cost" class="space-y-4">
@@ -414,6 +468,27 @@
       <div class="border-t border-white/10 pt-3 flex justify-between items-center">
         <span class="text-slate-300 font-semibold text-sm">Итого (все активные)</span>
         <span id="multiPrinterTotal" class="result-value text-lg">0 ₽</span>
+      </div>
+    </div>
+
+    <!-- Блок деталей проекта -->
+    <div id="projectBlock" class="hidden glass p-5 space-y-3">
+      <div class="flex items-center justify-between">
+        <span class="text-slate-300 text-sm font-semibold">🔧 Детали проекта</span>
+        <button type="button" id="projectAddPartBtn" class="modal-btn save" style="flex:none;font-size:12px;padding:6px 12px">+ Добавить деталь</button>
+      </div>
+      <div id="projectPartsList" class="space-y-2"></div>
+      <div class="project-total-row hidden" id="projectTotalRow">
+        <span class="text-slate-300 font-semibold text-sm">Итого проект</span>
+        <span id="projectTotalVal" class="result-value text-lg">0 ₽</span>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button type="button" id="projectSaveBtn" class="modal-btn save" style="flex:1;padding:12px">
+          💾 Сохранить проект
+        </button>
+        <button type="button" id="projectDeleteBtn" class="modal-btn delete" style="flex:0 0 auto;padding:12px 16px">
+          🗑
+        </button>
       </div>
     </div>
 
@@ -654,6 +729,8 @@
       applyCurrencyUI();
       update();
       saveState();
+      // Обновляем отображение проекта при смене валюты
+      if(window._projectRenderParts) window._projectRenderParts();
     });
   });
 
@@ -896,15 +973,30 @@
 
   // Копировать
   copyBtn.addEventListener('click', function() {
+    // Если режим проекта — копируем детали проекта
+    if(window._projectMode && window._projectMode()){
+      var pparts = window._projectParts ? window._projectParts() : [];
+      var ptotal = pparts.reduce(function(s,p){return s+(p.costRub||p.cost);},0);
+      var pname = window._projectGetName ? window._projectGetName() : null;
+      var markup2 = num(document.getElementById('markup').value||'0');
+      var lines = pparts.map(function(p){
+        return '  🖨 '+p.printerName+': '+p.weight+'г, '+p.time+'ч → '+(window._rubToCurrent?window._rubToCurrent(p.costRub||p.cost).toFixed(2):p.cost.toFixed(2))+' '+selectedCurrency;
+      }).join('\n');
+      var totalDisp = window._rubToCurrent ? window._rubToCurrent(ptotal*(1+markup2/100)).toFixed(2) : ptotal.toFixed(2);
+      var text = '📦 Проект'+(pname?' "'+pname+'"':'')+ ':\n'+lines+'\n💰 Итого: '+totalDisp+' '+selectedCurrency;
+      if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(text).then(function(){copyBtn.textContent='Скопировано!';setTimeout(function(){copyBtn.textContent='Скопировать расчет';},2000);}); }
+      else { fallbackCopy(text); }
+      return;
+    }
     const w = num(weight.value), t = num(time.value), price = getPrice();
     const disp = selectedCurrency === '₽' ? Number(price.toFixed(0)).toLocaleString('ru-RU') : price.toFixed(2);
-    const text = '📦 Расчет заказа:\n- Модель: ' + w + 'г.\n- Время: ' + t + 'ч.\n💰 Итоговая стоимость: ' + disp + ' ' + selectedCurrency;
+    const text2 = '📦 Расчет заказа:\n- Модель: ' + w + 'г.\n- Время: ' + t + 'ч.\n💰 Итоговая стоимость: ' + disp + ' ' + selectedCurrency;
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(function() {
+      navigator.clipboard.writeText(text2).then(function() {
         copyBtn.textContent = 'Скопировано!';
         setTimeout(function() { copyBtn.textContent = 'Скопировать расчет'; }, 2000);
       }).catch(function() { fallbackCopy(text); });
-    } else { fallbackCopy(text); }
+    } else { fallbackCopy(text2); }
   });
   function fallbackCopy(str) {
     const ta = document.createElement('textarea');
@@ -1453,6 +1545,8 @@
   window._getMyActivePrinterData = function(){ return window._myActivePrinter || null; };
   window._getActivePrinters      = function(){ return active(); };
   window._triggerUpdate          = function(){ syncCalc(); };
+  window._renderPrinters         = function(){ render(); };
+  window._deactivateAllPrinters  = function(){ printers.forEach(function(p){p.active=false;}); save(); render(); };
 
   // Кнопки добавить — внутри секции и banner снаружи
   var addBtn = document.getElementById('addPrinterBtn');
@@ -1468,6 +1562,354 @@
   // Старт
   load();
   render();
+
+})();
+</script>
+<script>
+// ── РЕЖИМ ПРОЕКТ ──────────────────────────────────────────────
+(function(){
+  var projectMode = false;
+  var parts = [];
+  var currentProjectId = null; // id текущего редактируемого проекта
+  var PROJ_KEY = 'projects_v1';
+
+  function fmt(v){ return (parseFloat(v)||0).toFixed(2).replace(/\.00$/,'') + ' ₽'; }
+  function nv(id){ var e=document.getElementById(id); return e?parseFloat(e.value)||0:0; }
+  function iv(id){ var e=document.getElementById(id); return e?parseInt(e.value)||0:0; }
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function toast(msg){
+    var t=document.getElementById('toast'),m=document.getElementById('toastMsg');
+    if(m)m.textContent=msg; if(t){t.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(function(){t.classList.remove('show');},3000);}
+  }
+  function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+  function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+
+  function loadProjects(){ try{ return JSON.parse(lsGet(PROJ_KEY))||[]; }catch(e){ return []; } }
+  function saveProjects(list){ lsSet(PROJ_KEY, JSON.stringify(list)); }
+
+  function calcCost(printer){
+    var w=nv('weight'),t=nv('time'),rate=nv('electricityRate');
+    var pack=nv('packaging'),def=iv('defect'),plastic=nv('plasticPrice');
+    var mc=document.getElementById('multicolor');
+    var ams=mc&&mc.checked;
+    var mult=ams?Math.max(1,1+0.3*(iv('colorCount')-1)):1;
+    var cost=(w/1000)*plastic + t*(printer.power/1000)*rate + t*printer.wear*mult;
+    return cost+cost*(def/100)+pack;
+  }
+
+  function clearFields(){
+    ['weight','time','electricityRate','packaging','defect','plasticPrice'].forEach(function(id){
+      var el=document.getElementById(id); if(el) el.value='0';
+    });
+    var mc=document.getElementById('multicolor'); if(mc) mc.checked=false;
+    if(window._mainUpdate) window._mainUpdate();
+  }
+
+  function projectTotal(){
+    return parts.reduce(function(s,p){return s+p.cost;},0);
+  }
+
+  function fmtCur(rubVal){
+    // Конвертируем из рублей в текущую валюту для отображения
+    var conv = window._rubToCurrent ? window._rubToCurrent(rubVal) : rubVal;
+    var cur = document.querySelector('.currency-btn.active');
+    var sym = cur ? cur.getAttribute('data-currency') : '₽';
+    if(sym==='₽') return Number(conv.toFixed(0)).toLocaleString('ru-RU')+' ₽';
+    if(sym==='₸') return Number(conv.toFixed(0)).toLocaleString('ru-RU')+' ₸';
+    return conv.toFixed(2)+' '+sym;
+  }
+
+  function getProjectName(){
+    if(!currentProjectId) return null;
+    try{
+      var list=loadProjects();
+      var p=list.find(function(x){return x.id===currentProjectId;});
+      return p?p.name:null;
+    }catch(e){return null;}
+  }
+
+  function renderParts(){
+    var list=document.getElementById('projectPartsList');
+    var totalRow=document.getElementById('projectTotalRow');
+    var totalVal=document.getElementById('projectTotalVal');
+    if(!list) return;
+    list.innerHTML='';
+    var sum=0;
+    parts.forEach(function(p){
+      sum+=p.costRub||p.cost; // используем costRub если есть
+      var card=document.createElement('div');
+      card.className='project-part-card';
+      var amsTag=p.ams?' · АМС':'';
+      card.innerHTML=
+        '<div style="flex:1;min-width:0">'+
+          '<div class="project-part-printer">🖨 '+esc(p.printerName)+'</div>'+
+          '<div class="project-part-meta">'+p.weight+'г · '+p.time+'ч · '+p.plastic+'₽/кг'+amsTag+'</div>'+
+        '</div>'+
+        '<div class="project-part-cost">'+fmtCur(p.costRub||p.cost)+'</div>'+
+        '<button class="printer-gear-btn ep-edit" type="button" style="margin-left:4px;flex-shrink:0">✏️</button>';
+      card.querySelector('.ep-edit').addEventListener('click',function(e){
+        e.stopPropagation(); openEditModal(p.id);
+      });
+      list.appendChild(card);
+    });
+    if(totalRow){
+      if(parts.length>0){
+        totalRow.classList.remove('hidden');
+        if(totalVal) totalVal.textContent=fmtCur(sum);
+      } else {
+        totalRow.classList.add('hidden');
+      }
+    }
+    // Обновляем вкладку Цена
+    var pr=document.getElementById('priceResult');
+    var markup=parseFloat((document.getElementById('markup')||{}).value)||0;
+    if(pr && projectMode) pr.textContent=fmtCur(sum*(1+markup/100));
+    // ── ФИКС 3: показываем название проекта
+    var pn=document.getElementById('pricePrinterName');
+    if(pn && projectMode){
+      var projName=getProjectName();
+      pn.textContent=projName?'🔧 '+projName:'🔧 Итого по проекту';
+    }
+  }
+
+  function openEditModal(id){
+    var p=parts.find(function(x){return x.id===id;}); if(!p) return;
+    var ov=document.createElement('div');
+    ov.className='printer-modal-overlay';
+    ov.innerHTML='<div class="printer-modal">'+
+      '<h3>✏️ '+esc(p.printerName)+'</h3>'+
+      '<label><div class="field-label">Вес (г)</div><input id="ep-w" type="number" value="'+p.weight+'"></label>'+
+      '<label><div class="field-label">Время (ч)</div><input id="ep-t" type="number" value="'+p.time+'"></label>'+
+      '<label><div class="field-label">Пластик (₽/кг)</div><input id="ep-pl" type="number" value="'+p.plastic+'"></label>'+
+      '<label><div class="field-label">Тариф э/э (₽/кВт·ч)</div><input id="ep-el" type="number" value="'+p.electricity+'"></label>'+
+      '<label><div class="field-label">Упаковка (₽)</div><input id="ep-pk" type="number" value="'+p.packaging+'"></label>'+
+      '<label><div class="field-label">Брак (%)</div><input id="ep-df" type="number" value="'+p.defect+'"></label>'+
+      '<label style="display:flex;align-items:center;justify-content:space-between;gap:8px">'+
+        '<div class="field-label" style="margin:0">Многоцветная печать (АМС)</div>'+
+        '<input id="ep-ams" type="checkbox"'+(p.ams?' checked':'')+' style="width:20px;height:20px;flex-shrink:0">'+
+      '</label>'+
+      '<label id="ep-colors-wrap" style="'+(p.ams?'':'display:none')+'"><div class="field-label">Количество цветов</div><input id="ep-cc" type="number" min="2" max="16" value="'+(p.colorCount||2)+'"></label>'+
+      '<div class="modal-actions">'+
+        '<button class="modal-btn cancel" id="ep-cancel" type="button">Отмена</button>'+
+        '<button class="modal-btn delete" id="ep-del" type="button">🗑</button>'+
+        '<button class="modal-btn save" id="ep-save" type="button">💾 Сохранить</button>'+
+      '</div></div>';
+    document.body.appendChild(ov);
+    // Показ/скрытие кол-ва цветов
+    ov.querySelector('#ep-ams').addEventListener('change',function(){
+      ov.querySelector('#ep-colors-wrap').style.display=this.checked?'':'none';
+    });
+    ov.querySelector('#ep-cancel').addEventListener('click',function(){ov.remove();});
+    ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
+    ov.querySelector('#ep-del').addEventListener('click',function(){
+      parts=parts.filter(function(x){return x.id!==id;}); ov.remove(); renderParts();
+    });
+    ov.querySelector('#ep-save').addEventListener('click',function(){
+      var w=parseFloat(ov.querySelector('#ep-w').value)||0;
+      var t=parseFloat(ov.querySelector('#ep-t').value)||0;
+      var pl=parseFloat(ov.querySelector('#ep-pl').value)||0;
+      var el=parseFloat(ov.querySelector('#ep-el').value)||0;
+      var pk=parseFloat(ov.querySelector('#ep-pk').value)||0;
+      var df=parseFloat(ov.querySelector('#ep-df').value)||0;
+      var ams=ov.querySelector('#ep-ams').checked;
+      var cc=parseInt(ov.querySelector('#ep-cc').value)||2;
+      var mult=ams?Math.max(1,1+0.3*(cc-1)):1;
+      var cost=(w/1000)*pl + t*(p.power/1000)*el + t*p.wear*mult;
+      cost=cost+cost*(df/100)+pk;
+      p.weight=w;p.time=t;p.plastic=pl;p.electricity=el;p.packaging=pk;p.defect=df;p.ams=ams;p.colorCount=cc;p.cost=cost;
+      ov.remove(); renderParts();
+    });
+  }
+
+  function openSaveModal(){
+    var ov=document.createElement('div');
+    ov.className='printer-modal-overlay';
+    var existing=loadProjects();
+    var cur=currentProjectId?existing.find(function(x){return x.id===currentProjectId;}):null;
+    ov.innerHTML='<div class="printer-modal">'+
+      '<h3>💾 Сохранить проект</h3>'+
+      '<label><div class="field-label">Название проекта</div>'+
+        '<input id="proj-name" type="text" placeholder="Мой проект" value="'+(cur?esc(cur.name):'')+'">'+
+      '</label>'+
+      '<div class="modal-actions">'+
+        '<button class="modal-btn cancel" id="ps-cancel" type="button">Отмена</button>'+
+        '<button class="modal-btn save" id="ps-save" type="button">💾 Сохранить</button>'+
+      '</div></div>';
+    document.body.appendChild(ov);
+    setTimeout(function(){ var inp=ov.querySelector('#proj-name'); if(inp) inp.focus(); },100);
+    ov.querySelector('#ps-cancel').addEventListener('click',function(){ov.remove();});
+    ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
+    ov.querySelector('#ps-save').addEventListener('click',function(){
+      var name=ov.querySelector('#proj-name').value.trim()||'Проект';
+      var list=loadProjects();
+      if(currentProjectId){
+        var idx=list.findIndex(function(x){return x.id===currentProjectId;});
+        if(idx>=0){ list[idx].name=name; list[idx].parts=parts; list[idx].updated=Date.now(); }
+        else { list.push({id:currentProjectId,name:name,parts:parts,updated:Date.now()}); }
+      } else {
+        currentProjectId=String(Date.now());
+        list.push({id:currentProjectId,name:name,parts:parts,updated:Date.now()});
+      }
+      saveProjects(list);
+      ov.remove();
+      toast('Проект "'+name+'" сохранён ✓');
+    });
+  }
+
+  function openMyProjects(){
+    var list=loadProjects();
+    var ov=document.createElement('div');
+    ov.className='printer-modal-overlay';
+    var rows=list.length?list.map(function(p){
+      var total=p.parts.reduce(function(s,x){return s+x.cost;},0);
+      var d=new Date(p.updated); var ds=d.getDate()+'.'+(d.getMonth()+1)+'.'+d.getFullYear();
+      return '<div class="project-part-card" style="margin-bottom:8px" data-pid="'+p.id+'">'+
+        '<div style="flex:1;min-width:0">'+
+          '<div class="project-part-printer">'+esc(p.name)+'</div>'+
+          '<div class="project-part-meta">'+p.parts.length+' дет. · '+ds+'</div>'+
+        '</div>'+
+        '<div class="project-part-cost">'+fmt(total)+'</div>'+
+        '<button class="printer-gear-btn proj-open" type="button" style="margin-left:4px">📂</button>'+
+        '<button class="printer-gear-btn proj-del" type="button" style="margin-left:2px">🗑</button>'+
+      '</div>';
+    }).join(''):'<div style="color:#64748b;text-align:center;padding:16px">Сохранённых проектов нет</div>';
+    ov.innerHTML='<div class="printer-modal">'+
+      '<h3>📂 Мои проекты</h3>'+
+      '<div id="proj-list">'+rows+'</div>'+
+      '<div class="modal-actions">'+
+        '<button class="modal-btn cancel" id="mp-close" type="button">Закрыть</button>'+
+      '</div></div>';
+    document.body.appendChild(ov);
+    ov.querySelector('#mp-close').addEventListener('click',function(){ov.remove();});
+    ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
+    ov.querySelectorAll('.proj-open').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        var pid=this.closest('[data-pid]').getAttribute('data-pid');
+        var list2=loadProjects();
+        var proj=list2.find(function(x){return x.id===pid;});
+        if(!proj) return;
+        ov.remove();
+        if(!projectMode) enterProjectMode(true);
+        parts=proj.parts;
+        currentProjectId=proj.id;
+        renderParts();
+        toast('Проект "'+proj.name+'" загружен');
+      });
+    });
+    ov.querySelectorAll('.proj-del').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        var pid=this.closest('[data-pid]').getAttribute('data-pid');
+        var list2=loadProjects();
+        var proj=list2.find(function(x){return x.id===pid;});
+        if(!proj) return;
+        if(!confirm('Удалить проект "'+proj.name+'"?')) return;
+        saveProjects(list2.filter(function(x){return x.id!==pid;}));
+        if(currentProjectId===pid){ currentProjectId=null; parts=[]; renderParts(); }
+        ov.remove(); openMyProjects();
+      });
+    });
+  }
+
+  function confirmDeleteProject(){
+    var ov=document.createElement('div');
+    ov.className='confirm-overlay';
+    ov.innerHTML='<div class="confirm-box">'+
+      '<div class="confirm-icon">🗑️</div>'+
+      '<h4>Удалить текущий проект?</h4>'+
+      '<p>Все детали будут сброшены</p>'+
+      '<div class="confirm-btns">'+
+        '<button class="modal-btn cancel" id="cd-no" type="button">Отмена</button>'+
+        '<button class="modal-btn delete" id="cd-yes" type="button">Удалить</button>'+
+      '</div></div>';
+    document.body.appendChild(ov);
+    ov.querySelector('#cd-no').addEventListener('click',function(){ov.remove();});
+    ov.querySelector('#cd-yes').addEventListener('click',function(){
+      parts=[]; currentProjectId=null;
+      renderParts(); ov.remove();
+      // Удаляем из сохранённых если был сохранён
+      if(currentProjectId){
+        var list=loadProjects();
+        saveProjects(list.filter(function(x){return x.id!==currentProjectId;}));
+      }
+      exitProjectMode();
+      toast('Проект удалён');
+    });
+  }
+
+  function enterProjectMode(silent){
+    projectMode=true;
+    parts=[];
+    currentProjectId=null;
+    document.body.classList.add('project-mode');
+    document.getElementById('projectBlock').classList.remove('hidden');
+    if(window._deactivateAllPrinters) window._deactivateAllPrinters();
+    clearFields();
+    renderParts();
+    if(!silent) toast('Режим Проект — выберите принтер и введите данные');
+  }
+
+  function exitProjectMode(){
+    projectMode=false;
+    document.body.classList.remove('project-mode');
+    document.getElementById('projectBlock').classList.add('hidden');
+    var pn=document.getElementById('pricePrinterName');
+    if(pn) pn.textContent='';
+    renderParts();
+  }
+
+  document.getElementById('projectModeBtn').addEventListener('click',function(){
+    if(projectMode) exitProjectMode(); else enterProjectMode();
+  });
+  document.getElementById('myProjectsBtn').addEventListener('click',function(){
+    openMyProjects();
+  });
+  document.getElementById('projectSaveBtn').addEventListener('click',function(){
+    if(parts.length===0){ toast('Нет деталей для сохранения'); return; }
+    openSaveModal();
+  });
+  document.getElementById('projectDeleteBtn').addEventListener('click',function(){
+    confirmDeleteProject();
+  });
+  document.getElementById('projectAddPartBtn').addEventListener('click',function(){
+    if(!projectMode) return;
+    var printer=window._getMyActivePrinterData&&window._getMyActivePrinterData();
+    if(!printer){ toast('Выберите принтер из списка'); return; }
+    var mc=document.getElementById('multicolor');
+    var ams=mc&&mc.checked;
+    var cc=iv('colorCount');
+    var cost=calcCost(printer);
+    // Конвертируем cost обратно в рубли для хранения
+    var costRub = window._rubToCurrent ? cost / (window._rubToCurrent(1)||1) * 1 : cost;
+    // Если текущая валюта рубли, costRub = cost
+    var curBtn = document.querySelector('.currency-btn.active');
+    var curSym = curBtn ? curBtn.getAttribute('data-currency') : '₽';
+    if(curSym === '₽') costRub = cost;
+    parts.push({
+      id:String(Date.now()),
+      printerId:printer.id, printerName:printer.name,
+      power:printer.power, wear:printer.wear,
+      weight:nv('weight'), time:nv('time'),
+      plastic:nv('plasticPrice'), electricity:nv('electricityRate'),
+      packaging:nv('packaging'), defect:iv('defect'),
+      ams:ams, colorCount:cc, cost:cost, costRub:costRub
+    });
+    renderParts();
+    clearFields();
+    if(window._deactivateAllPrinters) window._deactivateAllPrinters();
+    toast('Деталь добавлена — выберите следующий принтер');
+  });
+
+  // Обновляем цену в вкладке Цена при изменении наценки в режиме проекта
+  var markupEl=document.getElementById('markup');
+  if(markupEl) markupEl.addEventListener('input',function(){
+    if(projectMode) renderParts();
+  });
+
+  // Экспорт для других модулей
+  window._projectRenderParts = function(){ if(projectMode) renderParts(); };
+  window._projectMode        = function(){ return projectMode; };
+  window._projectParts       = function(){ return parts; };
+  window._projectGetName     = function(){ return getProjectName(); };
 
 })();
 </script>
