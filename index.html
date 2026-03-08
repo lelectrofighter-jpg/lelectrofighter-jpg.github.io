@@ -83,6 +83,96 @@
     input:focus, select:focus { outline: none; border-color: rgba(255,255,255,0.35); box-shadow: 0 0 0 2px rgba(255,255,255,0.08); }
     select option { background: #1e293b; color: #f8fafc; }
     .sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0; }
+
+    /* ── МОИ ПРИНТЕРЫ ── */
+    .my-printer-card {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 14px;
+      border: 1.5px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.04);
+      cursor: pointer; transition: all 0.2s; user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .my-printer-card.active {
+      border-color: rgba(99,102,241,0.7);
+      background: rgba(99,102,241,0.15);
+      box-shadow: 0 0 16px rgba(99,102,241,0.3), inset 0 0 12px rgba(99,102,241,0.08);
+    }
+    .my-printer-card.active .printer-name { color: #c7d2fe; }
+    .printer-active-dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+      background: rgba(148,163,184,0.3); transition: all 0.2s;
+    }
+    .my-printer-card.active .printer-active-dot {
+      background: #818cf8;
+      box-shadow: 0 0 8px rgba(129,140,248,0.8);
+    }
+    .printer-name { flex: 1; font-size: 13px; font-weight: 600; color: #94a3b8; transition: color 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .printer-meta { font-size: 10px; color: #64748b; flex-shrink: 0; }
+    .printer-gear-btn {
+      width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+      color: #64748b; font-size: 13px; cursor: pointer; transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .printer-gear-btn:active { background: rgba(255,255,255,0.12); color: #cbd5e1; }
+
+    /* Строки в таблице сравнения */
+    .compare-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.07);
+    }
+    .compare-name { font-size: 12px; color: #94a3b8; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .compare-cost { font-size: 15px; font-weight: 700; color: #e0e7ff; flex-shrink: 0; margin-left: 8px; }
+    .compare-row.cheapest { border-color: rgba(34,197,94,0.3); background: rgba(34,197,94,0.08); }
+    .compare-row.cheapest .compare-cost { color: #4ade80; }
+    .compare-cheapest-badge { font-size: 9px; color: #4ade80; margin-left: 5px; font-weight: 700; }
+
+    /* Модалка принтера */
+    .printer-modal-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+      display: flex; align-items: flex-end; justify-content: center;
+      padding: 0 0 env(safe-area-inset-bottom);
+    }
+    .printer-modal {
+      background: #111827; border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 24px 24px 0 0; padding: 20px; width: 100%; max-width: 480px;
+      animation: slideUp 0.25s ease;
+    }
+    @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+    .printer-modal h3 { font-size: 15px; font-weight: 700; color: #e2e8f0; margin-bottom: 16px; }
+    .printer-modal label { display: block; margin-bottom: 10px; }
+    .printer-modal .field-label { font-size: 13px; color: #94a3b8; margin-bottom: 6px; font-weight: 500; }
+    .printer-modal input, .printer-modal select {
+      width: 100%; padding: 12px 14px; border-radius: 12px;
+      background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15);
+      color: #f1f5f9; font-size: 15px; outline: none;
+    }
+    .printer-modal select { appearance: auto; }
+    .printer-modal input:focus, .printer-modal select:focus { border-color: rgba(99,102,241,0.6); box-shadow: 0 0 0 2px rgba(99,102,241,0.15); }
+    .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+    .modal-btn { flex: 1; padding: 11px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; border: none; }
+    .modal-btn:active { transform: scale(0.97); }
+    .modal-btn.save { background: linear-gradient(135deg, rgba(99,102,241,0.8), rgba(129,140,248,0.8)); color: white; }
+    .modal-btn.cancel { background: rgba(255,255,255,0.08); color: #94a3b8; border: 1px solid rgba(255,255,255,0.12); }
+    .modal-btn.delete { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
+
+    /* Диалог подтверждения */
+    .confirm-overlay {
+      position: fixed; inset: 0; z-index: 300;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    .confirm-box {
+      background: #111827; border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px; padding: 24px; max-width: 320px; width: 100%; text-align: center;
+    }
+    .confirm-box .confirm-icon { font-size: 2.5rem; margin-bottom: 10px; }
+    .confirm-box h4 { font-size: 15px; font-weight: 700; color: #e2e8f0; margin-bottom: 6px; }
+    .confirm-box p { font-size: 12px; color: #64748b; margin-bottom: 18px; line-height: 1.5; }
+    .confirm-btns { display: flex; gap: 8px; }
     .toggle-switch {
       flex-shrink:0; width:48px; height:28px; border-radius:14px;
       background:rgba(148,163,184,0.35); border:1px solid rgba(255,255,255,0.1);
@@ -180,47 +270,37 @@
   <div id="panel-cost" class="space-y-4">
     <div class="glass p-5 space-y-4">
 
-      <label class="block">
-        <span class="text-sm text-slate-300 mb-1.5 block">Принтер</span>
-        <select id="printer" class="w-full">
-          <option value="100,25">Anycubic Kobra 3 / V2 Combo (100W)</option>
-          <option value="100,25">Anycubic Kobra 3 S1 (100W)</option>
-          <option value="100,25">Anycubic Kobra 3 S1 Combo (100W)</option>
-          <option value="110,35">Bambu Lab P2S (110W)</option>
-          <option value="110,40">Bambu Lab P1P/P1S (110W)</option>
-          <option value="110,50">Bambu Lab X1-Carbon (110W)</option>
-          <option value="95,25">Bambu Lab A1 (95W)</option>
-          <option value="80,25">Bambu Lab A1 mini (80W)</option>
-          <option value="150,25">Flashforge Adventurer 5M/Pro (150W)</option>
-          <option value="100,35">Creality K1 (100W, 600мм/с)</option>
-          <option value="100,35">Creality K1 Max (100W)</option>
-          <option value="100,35">Creality K1C — Carbon Edition (100W)</option>
-          <option value="100,21">Creality Ender-3 V3 (100W)</option>
-          <option value="100,21">Creality Ender-3 V3 SE (100W)</option>
-          <option value="100,21">Creality Ender-3 V3 KE (100W)</option>
-          <option value="100,21">Anycubic Kobra 2 Neo (100W)</option>
-          <option value="600,45">Anycubic Kobra 2 Max (600W)</option>
-          <option value="1800,90">Elegoo OrangeStorm Giga (1800W)</option>
-          <option value="450,35">Elegoo Neptune 4 Max (450W)</option>
-          <option value="130,25">Flashforge (Универсальный) (130W)</option>
-          <option value="80,28">Prusa MK4S (80W)</option>
-          <option value="custom">Свой принтер (Кастом)</option>
-        </select>
-      </label>
+      <!-- КНОПКА ДОБАВИТЬ — всегда видна -->
+      <button type="button" id="addPrinterBtn" class="glass-btn w-full py-3 px-4 font-semibold text-indigo-300 border-indigo-400/30 mb-2">
+        🖨️ Добавить свой принтер
+      </button>
 
-      <div id="customPrinterFields" class="glass p-4 rounded-2xl border border-indigo-400/40 mt-2 space-y-3 hidden">
-        <div class="text-slate-300 text-sm font-semibold">Свой принтер (Кастом)</div>
-        <label class="block">
-          <span class="text-sm text-slate-300 mb-1.5 block">Мощность (Вт)</span>
-          <input type="number" id="customPower" min="0" step="1" placeholder="350" value="0">
-        </label>
-        <label class="block">
-          <span class="text-sm text-slate-300 mb-1.5 block">Износ в час (<span class="currency-symbol">₽</span>)</span>
-          <input type="number" id="customWear" min="0" step="1" placeholder="15" value="0">
-        </label>
+      <!-- МОИ ПРИНТЕРЫ — скрыт пока нет принтеров -->
+      <div id="myPrintersSection" class="hidden">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm text-slate-300 font-semibold">🖨️ Мои принтеры</span>
+          <span class="text-xs text-slate-500" id="activePrinterCount">0 активных</span>
+        </div>
+        <div id="myPrintersList" class="flex flex-col gap-2 mb-2"></div>
       </div>
 
-      <div class="glass p-4 rounded-2xl space-y-4 border border-white/10">
+      <!-- Кнопка для пустого состояния (нет принтеров) -->
+      <div id="addPrinterBanner" class="hidden mb-2">
+        <button type="button" id="addPrinterBannerBtn" class="glass-btn w-full py-4 px-4 font-semibold text-indigo-300 border-indigo-400/40 text-base">
+          🖨️ Добавить свой принтер
+        </button>
+      </div>
+
+      <!-- Скрытые поля для совместимости с основным JS (не отображаются) -->
+      <div id="standardPrinterSection" class="hidden">
+        <select id="printer"><option value="100,25">default</option><option value="custom">custom</option></select>
+        <div id="customPrinterFields">
+          <input type="number" id="customPower" value="0">
+          <input type="number" id="customWear" value="0">
+        </div>
+      </div>
+
+            <div class="glass p-4 rounded-2xl space-y-4 border border-white/10">
         <div class="text-slate-300 text-sm font-semibold">Материал</div>
         <label class="block">
           <span class="text-sm text-slate-300 mb-1.5 block">Вес (г)</span>
@@ -304,7 +384,8 @@
     </div>
 
     <div class="glass p-5">
-      <div class="text-slate-300 text-sm font-semibold mb-3 text-center">Результаты</div>
+      <div class="text-slate-300 text-sm font-semibold mb-1 text-center">Результаты</div>
+      <div id="resultPrinterName" class="text-center text-xs text-indigo-300 mb-3" style="min-height:16px"></div>
       <div class="space-y-2 text-sm">
         <div class="flex justify-between items-center">
           <span class="text-slate-400">Затраты</span>
@@ -323,7 +404,17 @@
           <span id="costResult" class="result-value text-lg">0 ₽</span>
         </div>
       </div>
-      <p class="text-slate-400 text-xs mt-3 leading-snug text-center">В стоимость включён износ оборудования согласно выбранной модели.</p>
+      <p id="resultNote" class="text-slate-400 text-xs mt-3 leading-snug text-center">Выберите активный принтер</p>
+    </div>
+
+    <!-- Сравнение по активным принтерам -->
+    <div id="multiPrinterResults" class="hidden glass p-5 space-y-3">
+      <div class="text-slate-300 text-sm font-semibold mb-1 text-center">📊 Сравнение принтеров</div>
+      <div id="multiPrinterTable" class="space-y-2"></div>
+      <div class="border-t border-white/10 pt-3 flex justify-between items-center">
+        <span class="text-slate-300 font-semibold text-sm">Итого (все активные)</span>
+        <span id="multiPrinterTotal" class="result-value text-lg">0 ₽</span>
+      </div>
     </div>
 
     <button type="button" id="resetBtn" class="reset-btn">🔄 Сбросить все поля</button>
@@ -339,6 +430,7 @@
     </div>
     <div class="glass p-5 text-center">
       <div class="text-slate-300 text-sm mb-1">Цена для клиента</div>
+      <div id="pricePrinterName" class="text-xs text-indigo-300 mb-2" style="min-height:16px"></div>
       <div id="priceResult" class="result-value">0 ₽</div>
     </div>
     <button type="button" id="copyBtn" class="glass-btn w-full py-3 px-4 font-semibold">
@@ -457,6 +549,9 @@
   let rateRubPerKzt = 0.155; // ~1 KZT = 0.155 RUB (1 RUB ≈ 6.44 KZT)
   let rateRubPerByr = 28.5;  // ~1 BYN = 28.5 RUB
 
+  // Экспортируем для модуля "Мои принтеры"
+  window._rubToCurrent = function(rub){ return rubToCurrent(rub); };
+
   function rubToCurrent(rub) {
     if (selectedCurrency === '$')  return rub / rateRubPerUsd;
     if (selectedCurrency === '€')  return rub / rateRubPerEur;
@@ -506,10 +601,13 @@
 
   function convertMoneyFields(fromCurrency, toCurrency) {
     MONEY_FIELDS.forEach(function(f) {
-      const v = parseFloat(f.el.value) || 0;
-      if (v === 0) return;
-      const rub = toRub(v, fromCurrency);
-      f.el.value = parseFloat(fromRub(rub, toCurrency).toFixed(f.dec));
+      try {
+        if (!f.el) return;
+        const v = parseFloat(f.el.value) || 0;
+        if (v === 0) return;
+        const rub = toRub(v, fromCurrency);
+        f.el.value = parseFloat(fromRub(rub, toCurrency).toFixed(f.dec));
+      } catch(e) {}
     });
     filaments.forEach(function(fil, i) {
       const inp = document.getElementById('fp-' + i);
@@ -550,7 +648,7 @@
     btn.addEventListener('click', function() {
       const newCur = this.getAttribute('data-currency');
       if (newCur === selectedCurrency) return;
-      convertMoneyFields(selectedCurrency, newCur);
+      try { convertMoneyFields(selectedCurrency, newCur); } catch(e) {}
       selectedCurrency = newCur;
       try { localStorage.setItem(CURRENCY_KEY, selectedCurrency); } catch(e) {}
       applyCurrencyUI();
@@ -567,6 +665,11 @@
   let wasteWeightManual = false;
 
   function getPrinterPowerAndAmortization() {
+    // Если есть активный "мой принтер" — используем его
+    const myP = window._getMyActivePrinterData && window._getMyActivePrinterData();
+    if(myP){
+      return { power: myP.power, amortizationPerHour: rubToCurrent(myP.wear), isCustom: true };
+    }
     const v = printers.value;
     if (v === 'custom') {
       return { power: num(customPower.value), amortizationPerHour: num(customWear.value), isCustom: true };
@@ -655,12 +758,57 @@
       wasteWeightInput.value = getCalculatedWasteWeight().toFixed(1);
     }
     const b = getCostBreakdown();
-    resultResources.textContent    = formatMoney(b.resourceCosts);
-    resultBeforeDefect.textContent = formatMoney(b.sumBeforeDefect);
-    resultDefectPct.textContent    = b.defectPct;
-    resultDefectCost.textContent   = formatMoney(b.defectCost);
-    costResult.textContent         = formatMoney(b.totalCost);
-    priceResult.textContent        = formatMoney(getPrice());
+    const _actP = window._getActivePrinters ? window._getActivePrinters() : [];
+    const _myP = window._getMyActivePrinterData && window._getMyActivePrinterData();
+    // Нет активного принтера — показываем 0
+    if(_actP.length === 0 && !_myP){
+      resultResources.textContent    = formatMoney(0);
+      resultBeforeDefect.textContent = formatMoney(0);
+      resultDefectPct.textContent    = '0';
+      resultDefectCost.textContent   = formatMoney(0);
+      costResult.textContent         = formatMoney(0);
+      priceResult.textContent        = formatMoney(0);
+    } else
+    if(_actP.length >= 2){
+      // Ждём пока renderMulti посчитает итог, берём из DOM
+      setTimeout(function(){
+        const multiTotal = document.getElementById('multiPrinterTotal');
+        const totalVal = multiTotal ? multiTotal.textContent : formatMoney(b.totalCost);
+        costResult.textContent = totalVal;
+        priceResult.textContent = totalVal;
+      }, 10);
+      resultResources.textContent    = formatMoney(b.resourceCosts);
+      resultBeforeDefect.textContent = formatMoney(b.sumBeforeDefect);
+      resultDefectPct.textContent    = b.defectPct;
+      resultDefectCost.textContent   = formatMoney(b.defectCost);
+    } else {
+      resultResources.textContent    = formatMoney(b.resourceCosts);
+      resultBeforeDefect.textContent = formatMoney(b.sumBeforeDefect);
+      resultDefectPct.textContent    = b.defectPct;
+      resultDefectCost.textContent   = formatMoney(b.defectCost);
+      costResult.textContent         = formatMoney(b.totalCost);
+      priceResult.textContent        = formatMoney(getPrice());
+    }
+
+    // Показываем имя активного принтера
+    const myP = window._getMyActivePrinterData && window._getMyActivePrinterData();
+    const activePrinters = window._getActivePrinters ? window._getActivePrinters() : [];
+    const nameEl = document.getElementById('resultPrinterName');
+    const priceNameEl = document.getElementById('pricePrinterName');
+    const noteEl = document.getElementById('resultNote');
+    if(activePrinters.length > 1){
+      if(nameEl){ nameEl.textContent = ''; nameEl.style.color = ''; }
+      if(priceNameEl){ priceNameEl.textContent = '📊 итог по всем активным принтерам'; priceNameEl.style.color = ''; }
+      if(noteEl) noteEl.textContent = 'Смотрите сравнение ниже';
+    } else if(myP){
+      if(nameEl){ nameEl.textContent = '🖨️ ' + myP.name; nameEl.style.color = ''; }
+      if(priceNameEl){ priceNameEl.textContent = '🖨️ ' + myP.name; priceNameEl.style.color = ''; }
+      if(noteEl) noteEl.textContent = 'Включён износ оборудования';
+    } else {
+      if(nameEl){ nameEl.textContent = '⚠️ Принтер не выбран'; nameEl.style.color = '#f87171'; }
+      if(priceNameEl){ priceNameEl.textContent = '⚠️ Принтер не выбран'; priceNameEl.style.color = '#f87171'; }
+      if(noteEl) noteEl.textContent = 'Нажмите на принтер чтобы активировать';
+    }
   }
 
   // ── UI ────────────────────────────────────────────────────────────
@@ -1039,8 +1187,287 @@
   if (filaments.length > 1 && multicolor.checked) buildFilColorsList();
   update();
   fetchRates();
+  // Экспортируем update для модуля принтеров
+  window._mainUpdate = update;
+
+})();
+
+// ── МОИ ПРИНТЕРЫ ──────────────────────────────────────────────
+(function(){
+  var KEY = 'my_printers_v2';
+  var MAX = 50;
+  var printers = [];
+
+  // localStorage с fallback для локального открытия файлов
+  var _mem = null;
+  function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return _mem; } }
+  function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){ _mem=v; } }
+
+  function load(){
+    try{
+      printers = JSON.parse(lsGet(KEY)) || [];
+      // Сбрасываем active у всех — пользователь сам активирует нужные
+      // Только для первой загрузки новой версии
+      printers.forEach(function(p){ p.active = false; });
+    }catch(e){ printers = []; }
+  }
+  function save(){ try{ lsSet(KEY, JSON.stringify(printers)); }catch(e){ console.warn('save failed',e); } }
+  function active(){ return printers.filter(function(p){ return p.active; }); }
+
+  function render(){
+    var sec    = document.getElementById('myPrintersSection');
+    var list   = document.getElementById('myPrintersList');
+    var stdSec = document.getElementById('standardPrinterSection');
+    var banner = null;
+    var cnt    = document.getElementById('activePrinterCount');
+    var multi  = document.getElementById('multiPrinterResults');
+
+    if(!sec || !list) return;
+
+    if(printers.length === 0){
+      sec.classList.add('hidden');
+      if(stdSec) stdSec.classList.remove('hidden');
+
+      window._myActivePrinter = null;
+      if(multi) multi.classList.add('hidden');
+      if(window._mainUpdate) window._mainUpdate();
+      return;
+    }
+
+    // Есть свои принтеры — прячем стандартный и banner (кнопка внутри секции)
+    sec.classList.remove('hidden');
+    if(stdSec) stdSec.classList.add('hidden');
+    if(banner) banner.classList.add('hidden');
+
+    var act = active();
+    if(cnt) cnt.textContent = act.length + ' активн' + (act.length===1?'ый':'ых');
+
+    list.innerHTML = '';
+    printers.forEach(function(p){
+      var div = document.createElement('div');
+      div.className = 'my-printer-card' + (p.active ? ' active' : '');
+      div.innerHTML =
+        '<div class="printer-active-dot"></div>' +
+        '<div class="printer-name">' + esc(p.name) + '</div>' +
+        '<div class="printer-meta">' + p.power + 'Вт · ' + p.wear + '₽/ч</div>' +
+        '<button class="printer-gear-btn" type="button">⚙️</button>';
+
+      div.querySelector('.printer-gear-btn').addEventListener('click', function(e){
+        e.stopPropagation();
+        openModal(p.id);
+      });
+
+      div.addEventListener('click', function(){
+        var a = active();
+        if(!p.active && a.length >= 8){ toast('Максимум 8 активных'); return; }
+        p.active = !p.active;
+        save();
+        render();
+        syncCalc();
+      });
+
+      list.appendChild(div);
+    });
+
+    syncCalc();
+  }
+
+  function syncCalc(){
+    var act = active();
+    window._myActivePrinter = act.length > 0 ? act[0] : null;
+    window._activeCount = act.length;
+    renderMulti();
+    if(window._mainUpdate) window._mainUpdate();
+  }
+
+  function renderMulti(){
+    var act   = active();
+    var block = document.getElementById('multiPrinterResults');
+    var table = document.getElementById('multiPrinterTable');
+    var total = document.getElementById('multiPrinterTotal');
+    if(!block) return;
+
+    if(act.length < 2){ block.classList.add('hidden'); return; }
+    block.classList.remove('hidden');
+
+    var results = act.map(function(p){ return { p:p, cost: calcFor(p) }; });
+    var minC = Math.min.apply(null, results.map(function(r){ return r.cost; }));
+
+    table.innerHTML = '';
+    var sum = 0;
+    results.forEach(function(r){
+      sum += r.cost;
+      var cheap = Math.abs(r.cost - minC) < 0.01;
+      var row = document.createElement('div');
+      row.className = 'compare-row' + (cheap ? ' cheapest' : '');
+      row.innerHTML =
+        '<span class="compare-name">' + esc(r.p.name) + (cheap ? '<span class="compare-cheapest-badge"> ✓</span>' : '') + '</span>' +
+        '<span class="compare-cost">' + fmt(r.cost) + '</span>';
+      table.appendChild(row);
+    });
+    if(total) total.textContent = fmt(sum);
+  }
+
+  function calcFor(p){
+    function n(id){ var e=document.getElementById(id); return e ? parseFloat(e.value)||0 : 0; }
+    function i(id){ var e=document.getElementById(id); return e ? parseInt(e.value)||0 : 0; }
+    var w    = n('weight'), t = n('time'), rate = n('electricityRate');
+    var pack = n('packaging'), def = i('defect'), plastic = n('plasticPrice');
+    var mc   = document.getElementById('multicolor');
+    var mult = (mc && mc.checked) ? Math.max(1, 1 + 0.3*(i('colorCount')-1)) : 1;
+    var cost = (w/1000)*plastic + t*(p.power/1000)*rate + t*p.wear*mult;
+    return cost + cost*(def/100) + pack;
+  }
+
+  function fmt(v){
+    return v.toFixed(2).replace(/\.00$/,'') + ' ₽';
+  }
+
+  // ── МОДАЛКА ──────────────────────────────────────────────────
+  var PRESETS = [
+    {name:'Anycubic Kobra 3 / S1 Combo', power:100, wear:25},
+    {name:'Bambu Lab P2S',               power:110, wear:35},
+    {name:'Bambu Lab P1P / P1S',         power:110, wear:40},
+    {name:'Bambu Lab X1-Carbon',         power:110, wear:50},
+    {name:'Bambu Lab A1',                power:95,  wear:25},
+    {name:'Bambu Lab A1 mini',           power:80,  wear:25},
+    {name:'Flashforge Adventurer 5M/Pro',power:150, wear:25},
+    {name:'Creality K1 / K1 Max / K1C', power:100, wear:35},
+    {name:'Creality Ender-3 V3',         power:100, wear:21},
+    {name:'Anycubic Kobra 2 Neo',        power:100, wear:21},
+    {name:'Anycubic Kobra 2 Max',        power:600, wear:45},
+    {name:'Elegoo OrangeStorm Giga',     power:1800,wear:90},
+    {name:'Elegoo Neptune 4 Max',        power:450, wear:35},
+    {name:'Flashforge (Универсальный)',  power:130, wear:25},
+    {name:'Prusa MK4S',                  power:80,  wear:28}
+  ];
+
+  function openModal(editId){
+    var pr = editId ? printers.find(function(x){ return x.id===editId; }) : null;
+    var isNew = !pr;
+
+    var presOpts = '<option value="">— выбрать из списка —</option>' +
+      PRESETS.map(function(x){
+        return '<option value="'+x.power+'|'+x.wear+'|'+esc(x.name)+'">'+esc(x.name)+' ('+x.power+'Вт · '+x.wear+'₽/ч)</option>';
+      }).join('');
+
+    var ov = document.createElement('div');
+    ov.className = 'printer-modal-overlay';
+    ov.innerHTML =
+      '<div class="printer-modal" id="pm-box">' +
+        '<h3>' + (isNew ? '➕ Новый принтер' : '⚙️ Редактировать') + '</h3>' +
+        (isNew ? '<label><div class="field-label">Выбрать из списка</div><select id="pm-preset">'+presOpts+'</select></label>' : '') +
+        '<label><div class="field-label">Название</div><input id="pm-name" type="text" maxlength="40" placeholder="Мой принтер" value="'+esc(pr?pr.name:'')+'"></label>' +
+        '<label><div class="field-label">Мощность (Вт)</div><input id="pm-power" type="number" min="1" max="9999" placeholder="100" value="'+(pr?pr.power:'')+'"></label>' +
+        '<label><div class="field-label">Износ в час (₽)</div><input id="pm-wear" type="number" min="0" max="9999" placeholder="25" value="'+(pr?pr.wear:'')+'"></label>' +
+        '<div class="modal-actions">' +
+          '<button id="pm-cancel" class="modal-btn cancel" type="button">Отмена</button>' +
+          (isNew ? '' : '<button id="pm-delete" class="modal-btn delete" type="button">🗑</button>') +
+          '<button id="pm-save" class="modal-btn save" type="button">💾 Сохранить</button>' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(ov);
+
+    var box   = ov.querySelector('#pm-box');
+    var inpN  = ov.querySelector('#pm-name');
+    var inpP  = ov.querySelector('#pm-power');
+    var inpW  = ov.querySelector('#pm-wear');
+    var sel   = ov.querySelector('#pm-preset');
+    var btnS  = ov.querySelector('#pm-save');
+    var btnC  = ov.querySelector('#pm-cancel');
+    var btnD  = ov.querySelector('#pm-delete');
+
+    setTimeout(function(){ inpN.focus(); }, 50);
+
+    if(sel){
+      sel.addEventListener('change', function(){
+        var parts = this.value.split('|');
+        if(parts.length < 3) return;
+        inpP.value = parts[0];
+        inpW.value = parts[1];
+        inpN.value = parts[2];
+      });
+    }
+
+    btnC.addEventListener('click', function(){ ov.remove(); });
+    ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
+
+    btnS.addEventListener('click', function(){
+      var name  = inpN.value.trim();
+      var power = parseFloat(inpP.value) || 0;
+      var wear  = parseFloat(inpW.value) || 0;
+      if(!name)     { toast('Введите название'); return; }
+      if(power < 1) { toast('Введите мощность'); return; }
+      if(isNew){
+        if(printers.length >= MAX){ toast('Максимум 50 принтеров'); return; }
+        printers.push({ id: String(Date.now()), name:name, power:power, wear:wear, active:false });
+      } else {
+        pr.name=name; pr.power=power; pr.wear=wear;
+      }
+      save();
+      ov.remove();
+      render();
+      toast('Принтер сохранён ✓');
+    });
+
+    if(btnD){
+      btnD.addEventListener('click', function(){
+        ov.remove();
+        confirm_(editId);
+      });
+    }
+  }
+
+  function confirm_(id){
+    var pr = printers.find(function(x){ return x.id===id; });
+    if(!pr) return;
+    var ov = document.createElement('div');
+    ov.className = 'confirm-overlay';
+    ov.innerHTML =
+      '<div class="confirm-box">' +
+        '<div class="confirm-icon">🗑️</div>' +
+        '<h4>Удалить принтер?</h4>' +
+        '<p>"' + esc(pr.name) + '" будет удалён</p>' +
+        '<div class="confirm-btns">' +
+          '<button class="modal-btn cancel" id="cn-no" type="button">Отмена</button>' +
+          '<button class="modal-btn delete" id="cn-yes" type="button">Удалить</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    ov.querySelector('#cn-no').addEventListener('click', function(){ ov.remove(); });
+    ov.querySelector('#cn-yes').addEventListener('click', function(){
+      printers = printers.filter(function(x){ return x.id!==id; });
+      save(); ov.remove(); render();
+    });
+  }
+
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function toast(msg){
+    var t=document.getElementById('toast'), m=document.getElementById('toastMsg');
+    if(m) m.textContent=msg; else if(t) t.textContent=msg;
+    if(t){ t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(function(){ t.classList.remove('show'); },3000); }
+  }
+
+  // Экспорт
+  window._getMyActivePrinterData = function(){ return window._myActivePrinter || null; };
+  window._getActivePrinters      = function(){ return active(); };
+  window._triggerUpdate          = function(){ syncCalc(); };
+
+  // Кнопки добавить — внутри секции и banner снаружи
+  var addBtn = document.getElementById('addPrinterBtn');
+  if(addBtn) addBtn.addEventListener('click', function(){ openModal(null); });
+
+
+  // Слушаем поля калькулятора
+  ['weight','time','electricityRate','packaging','defect','plasticPrice','colorCount'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.addEventListener('input', function(){ renderMulti(); });
+  });
+
+  // Старт
+  load();
+  render();
 
 })();
 </script>
-</body>
-</html>
